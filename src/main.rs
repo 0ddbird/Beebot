@@ -40,9 +40,11 @@ fn generate_slack_message(
             Status::Warning => ":warning:",
             Status::Alert => ":fire:",
         };
+        // Escaping "<" character for Slack
+        let formatted_message = result.message.replace("<", "&lt;");
         message.push_str(&format!(
             "{} {}: {}\n",
-            status_symbol, result.name, result.message
+            status_symbol, result.name, formatted_message
         ));
     }
 
@@ -61,12 +63,12 @@ fn generate_mail_content(
 
     for result in validation_results {
         let status_text = match result.status {
-            Status::Ok => "OK",
-            Status::Warning => "Warning",
-            Status::Alert => "Alert",
+            Status::Ok => "✅",
+            Status::Warning => "⚠️",
+            Status::Alert => "🔥",
         };
         message.push_str(&format!(
-            "{} - {}: {}\n",
+            "{} {}: {}\n",
             status_text, result.name, result.message
         ));
     }
@@ -76,15 +78,16 @@ fn generate_mail_content(
 
 #[tokio::main]
 async fn main() {
+    let log_file_name = format!("{}.log", Local::now().format("%Y%m%d_%H%M%S"));
     let _ = WriteLogger::init(
         LevelFilter::Info,
         Config::default(),
-        File::create("my_log.log").unwrap(),
+        File::create(log_file_name).unwrap(),
     );
     info!("Beebot starting");
 
     dotenv().ok();
-    let current_time = Local::now().format("%H:%M:%S").to_string();
+
     let api_token = env::var("API_TOKEN").unwrap();
 
     let slack_token = env::var("SLACK_API_TOKEN").unwrap();
@@ -110,6 +113,8 @@ async fn main() {
     info!("Validating results");
     let validation_result = validators::validate_checks(&page_checks);
 
+    let current_time = Local::now().format("%H:%M").to_string();
+
     info!("Sending Slack message");
     let slack_message = generate_slack_message(&validation_result, &current_time);
     if let Err(e) = send_slack_message(&slack_token, &slack_channel, &slack_message).await {
@@ -123,7 +128,7 @@ async fn main() {
         info!("Sending alert email");
         let mail_body = generate_mail_content(&validation_result, &current_time);
 
-        info!("Mail content: {}", mail_body);
+        info!("Mail content:\n{}", mail_body);
         if let Err(e) = send_mail(
             &sendgrid_token,
             &sendgrid_sender,
