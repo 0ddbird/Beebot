@@ -11,6 +11,7 @@ use tokio;
 extern crate diesel;
 
 use crate::db::{establish_connection, get_last_entry, insert_results, LogEntry};
+use crate::parser::EmailStatus;
 use crate::slack::send_slack_message;
 use crate::validators::Status;
 
@@ -25,7 +26,7 @@ mod validators;
 pub struct PageResults {
     validated_payments_count: Option<usize>,
     pdf_count: Option<usize>,
-    email_check_count: Option<usize>,
+    email_check_count: Option<EmailStatus>,
     paid_vouchers_count: Option<usize>,
     is_purchase_website_ok: Option<bool>,
 }
@@ -122,17 +123,25 @@ async fn main() {
 
     if let Ok(ref mut conn) = conn {
         info!("Successfully initialized the database");
-        let log_entry = LogEntry {
+
+
+
+        let mut log_entry = LogEntry {
             id: None,
             payments: page_results.validated_payments_count.unwrap_or_default() as i32,
             vouchers: page_results.paid_vouchers_count.unwrap_or_default() as i32,
             pdf_count: page_results.pdf_count.unwrap_or_default() as i32,
-            email_count: page_results.email_check_count.unwrap_or_default() as i32,
+            email_count: 0,
             website_ok: page_results.is_purchase_website_ok.unwrap_or_default(),
             slack_sent: is_slack_message_sent,
             email_sent: is_email_sent,
             datetime: None,
         };
+
+        if let Some(email_status) = page_results.email_check_count {
+            log_entry.email_count = email_status.sent as i32;
+        }
+
         match insert_results(conn, log_entry) {
             Ok(_) => info!("Results successfully inserted into the database"),
             Err(e) => eprintln!("Failed to insert results into the database: {:?}", e),

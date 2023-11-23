@@ -2,6 +2,14 @@ use crate::PageResults;
 use scraper::{Html, Selector};
 use std::collections::HashMap;
 
+#[derive(Default, Copy, Clone)]
+pub struct EmailStatus {
+    pub(crate) sent: usize,
+    pub(crate) not_sent: usize,
+    pub(crate) bulk: usize,
+}
+
+
 fn count_paid_vouchers(html: &str) -> usize {
     let document = Html::parse_document(html);
     let selector = Selector::parse("td.field-state").unwrap();
@@ -22,14 +30,26 @@ fn count_pdf(html: &str) -> usize {
         .count()
 }
 
-fn count_email_check(html: &str) -> usize {
+fn count_email_statuses(html: &str) -> EmailStatus {
     let document = Html::parse_document(html);
     let selector = Selector::parse("td.field-_has_been_sent").unwrap();
 
-    document
-        .select(&selector)
-        .filter(|element| element.inner_html().trim() == "Yes")
-        .count()
+    let mut email_status = EmailStatus {
+        sent: 0,
+        not_sent: 0,
+        bulk: 0,
+    };
+
+    for element in document.select(&selector) {
+        match element.inner_html().trim() {
+            "Yes" => email_status.sent += 1,
+            "No" => email_status.not_sent += 1,
+            "Bulk" => email_status.bulk += 1,
+            _ => {}
+        }
+    }
+
+    email_status
 }
 
 fn count_validated_payments(html: &str) -> usize {
@@ -66,7 +86,7 @@ pub fn parse_pages(html_contents: &HashMap<String, String>) -> PageResults {
 
     if let Some(html) = html_contents.get("vouchers") {
         results.pdf_count = Some(count_pdf(html));
-        results.email_check_count = Some(count_email_check(html));
+        results.email_check_count = Some(count_email_statuses(html));
     }
 
     if let Some(html) = html_contents.get("paid_vouchers") {

@@ -1,4 +1,5 @@
 use crate::PageResults;
+use crate::parser::EmailStatus;
 
 #[derive(PartialEq)]
 pub enum Status {
@@ -29,7 +30,7 @@ pub fn validate(page_results: &PageResults) -> Vec<UnitValidationResult> {
         validate_count("Paid vouchers", 75, page_results.paid_vouchers_count);
     let pdf_count_result = validate_count("PDF count", 100, page_results.pdf_count);
     let email_check_result =
-        validate_count("Email check count", 100, page_results.email_check_count);
+        validate_status("Email check count", page_results.email_check_count);
     let purchase_website_result =
         validate_purchase_website_status("Purchase website", page_results.is_purchase_website_ok);
 
@@ -68,6 +69,40 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
     }
 
     result
+}
+
+fn validate_status(name: &str, statuses: Option<EmailStatus>) -> UnitValidationResult {
+        let mut result = UnitValidationResult {
+        name: name.to_string(),
+        status: Status::Alert,
+        message: "".to_string(),
+        value: Value::Count(0),
+    };
+
+    if let Some(statuses) = statuses {
+        let total_emails = statuses.sent + statuses.not_sent;
+        let sent_percentage = if total_emails > 0 {
+            (statuses.sent as f64 / total_emails as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        result.status = if sent_percentage >= 75.0 {
+            Status::Ok
+        } else if sent_percentage >= 50.0 {
+            Status::Warning
+        } else {
+            Status::Alert
+        };
+
+        result.message = format!(
+            "{} sent, {} not sent, {} bulk",
+            statuses.sent, statuses.not_sent, statuses.bulk
+        );
+    }
+
+    result
+
 }
 
 fn validate_purchase_website_status(name: &str, is_ok: Option<bool>) -> UnitValidationResult {
