@@ -16,7 +16,6 @@ pub struct LogEntry {
     pub(crate) slack_sent: bool,
     pub(crate) email_sent: bool,
     pub(crate) datetime: Option<String>,
-
 }
 
 pub fn establish_connection(db_url: &str) -> Result<SqliteConnection, ConnectionError> {

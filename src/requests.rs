@@ -1,6 +1,9 @@
-use futures::future;
-use reqwest;
 use std::collections::HashMap;
+
+use futures::future;
+use log::info;
+use reqwest;
+
 
 async fn fetch_html(url: &str, api_token: &str) -> Result<(String, String), reqwest::Error> {
     let client = reqwest::Client::new();
@@ -37,7 +40,7 @@ pub async fn request_pages(api_token: &str, urls: &Vec<(&str, String)>) -> HashM
                 html_contents.insert(key, html);
             }
             Err(e) => {
-                println!("Error: {}", e)
+                info!("Error: {}", e)
             }
         }
     }

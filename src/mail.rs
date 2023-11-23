@@ -11,7 +11,7 @@ pub fn compose_mail_body(
         let status_text = match result.status {
             Status::Ok => "✅",
             Status::Warning => "⚠️",
-            Status::Alert => "🔥",
+            Status::Alert => "❌",
         };
         message.push_str(&format!(
             "{} {}: {}\n",
@@ -35,7 +35,7 @@ pub async fn send_mail(
         .json(&json!({
             "personalizations": [{
                 "to": [{"email": to}],
-                "subject": "🆘 BEEBOT ALERT !"
+                "subject": "🚨 EMERGENCY | Issue with MBB app"
             }],
             "from": {"email": from},
             "content": [{

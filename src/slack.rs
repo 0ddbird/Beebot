@@ -8,7 +8,7 @@ fn get_corresponding_value(name: &str, log_entry: &LogEntry) -> Value {
         "Validated payments" => Value::Count(log_entry.payments as usize),
         "Paid vouchers" => Value::Count(log_entry.vouchers as usize),
         "PDF count" => Value::Count(log_entry.pdf_count as usize),
-        "Email check count" => Value::Count(log_entry.email_count as usize),
+        "Email count" => Value::Count(log_entry.email_count as usize),
         "Purchase website" => Value::Bool(log_entry.website_ok),
         _ => Value::Count(0),
     }
@@ -35,9 +35,9 @@ pub fn compose_slack_message(
             trend_icon = match (last_entry_value, &result.value) {
                 (Value::Count(last_count), Value::Count(current_count)) => {
                     if current_count > &last_count {
-                        ":arrow_upper_right:".to_string()
+                        ":chart_with_upwards_trend:".to_string()
                     } else if current_count < &last_count {
-                        ":arrow_lower_right:".to_string()
+                        "::chart_with_downwards_trend::".to_string()
                     } else {
                         "".to_string()
                     }
@@ -49,7 +49,7 @@ pub fn compose_slack_message(
         let status_symbol = match result.status {
             Status::Ok => ":white_check_mark:",
             Status::Warning => ":warning:",
-            Status::Alert => ":fire:",
+            Status::Alert => ":x:",
         };
         // Escaping "<" character for Slack
         let formatted_message = result.message.replace("<", "&lt;");

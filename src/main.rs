@@ -5,7 +5,7 @@ use dotenv::dotenv;
 use log::info;
 use mail::send_mail;
 use simplelog::*;
-use std::fs::File;
+use std::fs::{self, File};
 use tokio;
 
 extern crate diesel;
@@ -33,7 +33,8 @@ pub struct PageResults {
 
 #[tokio::main]
 async fn main() {
-    let log_file_name = format!("{}.log", Local::now().format("%Y%m%d_%H%M%S"));
+    fs::create_dir_all("logs").expect("Failed to create logs directory");
+    let log_file_name = format!("logs/{}.log", Local::now().format("%Y_%m_%d_%H-%M-%S"));
     let _ = WriteLogger::init(
         LevelFilter::Info,
         Config::default(),
@@ -76,7 +77,10 @@ async fn main() {
 
     if let Ok(ref mut conn) = conn {
         last_entry = match get_last_entry(conn) {
-            Ok(entry) => Some(entry),
+            Ok(entry) => {
+                info!("Fetched previous log in DB for comparison");
+                Some(entry)
+            },
             Err(e) => {
                 info!("Error fetching last entry: {:?}", e);
                 None
@@ -94,26 +98,27 @@ async fn main() {
     match send_slack_message(&slack_token, &slack_channel, &slack_message).await {
         Ok(_) => {
             is_slack_message_sent = true;
-            info!("Slack message sent successfully");
+            info!("Slack message sent");
         }
         Err(e) => {
-            eprintln!("Failed to send message to Slack: {}", e);
+            info!("Failed to send message to Slack: {}", e);
         }
     }
+
+    let mail_body = mail::compose_mail_body(&validation_results, &current_time);
+
+    info!("\n{}", mail_body);
 
     let mut is_email_sent = false;
     if validation_results
         .iter()
         .any(|result| result.status == Status::Alert)
     {
-        let mail_body = mail::compose_mail_body(&validation_results, &current_time);
-
         info!("Sending alert email\nMail content:\n{}", mail_body);
-
         match send_mail(&mail_token, &mail_sender, &mail_recipient, &mail_body).await {
             Ok(_) => {
                 is_email_sent = true;
-                info!("Email sent successfully");
+                info!("Email sent");
             }
             Err(e) => {
                 info!("Failed to send email: {}", e);
@@ -122,10 +127,6 @@ async fn main() {
     }
 
     if let Ok(ref mut conn) = conn {
-        info!("Successfully initialized the database");
-
-
-
         let mut log_entry = LogEntry {
             id: None,
             payments: page_results.validated_payments_count.unwrap_or_default() as i32,
@@ -143,8 +144,8 @@ async fn main() {
         }
 
         match insert_results(conn, log_entry) {
-            Ok(_) => info!("Results successfully inserted into the database"),
-            Err(e) => eprintln!("Failed to insert results into the database: {:?}", e),
+            Ok(_) => info!("Results inserted into the database"),
+            Err(e) => info!("Failed to insert results into the database: {:?}", e),
         }
     } else {
         info!("Failed to establish a database connection");

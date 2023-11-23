@@ -1,5 +1,6 @@
-use crate::PageResults;
+use std::fmt::{Display, Formatter, Result};
 use crate::parser::EmailStatus;
+use crate::PageResults;
 
 #[derive(PartialEq)]
 pub enum Status {
@@ -11,6 +12,15 @@ pub enum Status {
 pub enum Value {
     Count(usize),
     Bool(bool),
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Value::Count(count) => write!(f, "{}", count),
+            Value::Bool(b) => write!(f, "{}", b)
+        }
+    }
 }
 
 pub struct UnitValidationResult {
@@ -29,8 +39,7 @@ pub fn validate(page_results: &PageResults) -> Vec<UnitValidationResult> {
     let paid_vouchers_result =
         validate_count("Paid vouchers", 75, page_results.paid_vouchers_count);
     let pdf_count_result = validate_count("PDF count", 100, page_results.pdf_count);
-    let email_check_result =
-        validate_status("Email check count", page_results.email_check_count);
+    let emails_result = validate_status("Email count", page_results.email_check_count);
     let purchase_website_result =
         validate_purchase_website_status("Purchase website", page_results.is_purchase_website_ok);
 
@@ -38,7 +47,7 @@ pub fn validate(page_results: &PageResults) -> Vec<UnitValidationResult> {
         payments_result,
         paid_vouchers_result,
         pdf_count_result,
-        email_check_result,
+        emails_result,
         purchase_website_result,
     ]
 }
@@ -53,11 +62,11 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
 
     match count {
         None => {
-            result.message = "ARE NOT AVAILABLE".to_string();
+            result.message = "NOT AVAILABLE".to_string();
             result.status = Status::Alert;
         }
         Some(c) if c < threshold => {
-            result.message = format!("{} < {}", c, threshold);
+            result.message = format!("{} (<{})", c, threshold);
             result.value = Value::Count(c);
             result.status = Status::Warning;
         }
@@ -68,11 +77,13 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
         }
     }
 
+
+
     result
 }
 
 fn validate_status(name: &str, statuses: Option<EmailStatus>) -> UnitValidationResult {
-        let mut result = UnitValidationResult {
+    let mut result = UnitValidationResult {
         name: name.to_string(),
         status: Status::Alert,
         message: "".to_string(),
@@ -89,20 +100,21 @@ fn validate_status(name: &str, statuses: Option<EmailStatus>) -> UnitValidationR
 
         result.status = if sent_percentage >= 75.0 {
             Status::Ok
-        } else if sent_percentage >= 50.0 {
+        } else if sent_percentage >= 60.0 {
             Status::Warning
         } else {
             Status::Alert
         };
 
+        result.value = Value::Count(statuses.sent);
+
         result.message = format!(
-            "{} sent, {} not sent, {} bulk",
+            "{} sent, {} not sent, {} from bulk import",
             statuses.sent, statuses.not_sent, statuses.bulk
         );
     }
 
     result
-
 }
 
 fn validate_purchase_website_status(name: &str, is_ok: Option<bool>) -> UnitValidationResult {
@@ -115,12 +127,12 @@ fn validate_purchase_website_status(name: &str, is_ok: Option<bool>) -> UnitVali
 
     match is_ok {
         Some(true) => {
-            result.message = "is OK".to_string();
+            result.message = "ONLINE".to_string();
             result.status = Status::Ok;
             result.value = Value::Bool(true);
         }
         None | Some(false) => {
-            result.message = "is DOWN".to_string();
+            result.message = "DOWN".to_string();
             result.status = Status::Alert;
         }
     }

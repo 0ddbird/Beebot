@@ -9,7 +9,6 @@ pub struct EmailStatus {
     pub(crate) bulk: usize,
 }
 
-
 fn count_paid_vouchers(html: &str) -> usize {
     let document = Html::parse_document(html);
     let selector = Selector::parse("td.field-state").unwrap();
