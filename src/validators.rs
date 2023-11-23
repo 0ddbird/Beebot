@@ -48,7 +48,7 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
             result.status = Status::Alert;
         }
         Some(c) if c < threshold => {
-            result.message = format!("{} < {}", c, threshold);
+            result.message = format!("{} &lt; {}", c, threshold);
             result.status = Status::Warning;
         }
         Some(c) => {
