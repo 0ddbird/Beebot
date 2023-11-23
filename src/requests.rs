@@ -4,7 +4,6 @@ use futures::future;
 use log::info;
 use reqwest;
 
-
 async fn fetch_html(url: &str, api_token: &str) -> Result<(String, String), reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client

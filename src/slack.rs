@@ -14,13 +14,13 @@ fn get_corresponding_value(name: &str, log_entry: &LogEntry) -> Value {
     }
 }
 
-pub fn compose_slack_message(
+pub fn create_message(
     validation_results: &Vec<UnitValidationResult>,
-    last_entry: Option<LogEntry>,
+    last_record: Option<LogEntry>,
     current_time: &String,
 ) -> String {
     let mut should_alert_channel = false;
-    let mut message = format!("*Report Time: {}*\n\n", current_time);
+    let mut message = format!("*Report time: {}*\n\n", current_time);
 
     for result in validation_results {
         if result.status == Status::Alert {
@@ -29,15 +29,15 @@ pub fn compose_slack_message(
 
         let mut trend_icon = String::new();
 
-        if let Some(ref entry) = last_entry {
-            let last_entry_value = get_corresponding_value(&result.name, entry);
+        if let Some(ref entry) = last_record {
+            let last_record_value = get_corresponding_value(&result.name, entry);
 
-            trend_icon = match (last_entry_value, &result.value) {
+            trend_icon = match (last_record_value, &result.value) {
                 (Value::Count(last_count), Value::Count(current_count)) => {
                     if current_count > &last_count {
                         ":chart_with_upwards_trend:".to_string()
                     } else if current_count < &last_count {
-                        "::chart_with_downwards_trend::".to_string()
+                        ":chart_with_downwards_trend:".to_string()
                     } else {
                         "".to_string()
                     }
@@ -66,11 +66,7 @@ pub fn compose_slack_message(
     message
 }
 
-pub async fn send_slack_message(
-    token: &str,
-    channel: &str,
-    message: &str,
-) -> Result<(), reqwest::Error> {
+pub async fn post_message(token: &str, channel: &str, message: &str) -> Result<(), reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client
         .post("https://slack.com/api/chat.postMessage")

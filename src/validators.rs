@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter, Result};
 use crate::parser::EmailStatus;
-use crate::PageResults;
+use crate::parser::PageResults;
+use std::fmt::{Display, Formatter, Result};
 
 #[derive(PartialEq)]
 pub enum Status {
@@ -18,7 +18,7 @@ impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Value::Count(count) => write!(f, "{}", count),
-            Value::Bool(b) => write!(f, "{}", b)
+            Value::Bool(b) => write!(f, "{}", b),
         }
     }
 }
@@ -77,8 +77,6 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
         }
     }
 
-
-
     result
 }
 
@@ -109,7 +107,7 @@ fn validate_status(name: &str, statuses: Option<EmailStatus>) -> UnitValidationR
         result.value = Value::Count(statuses.sent);
 
         result.message = format!(
-            "{} sent, {} not sent, {} from bulk import",
+            "{} SENT, {} NOT SENT, {} BULK",
             statuses.sent, statuses.not_sent, statuses.bulk
         );
     }

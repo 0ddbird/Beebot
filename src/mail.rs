@@ -5,7 +5,7 @@ pub fn compose_mail_body(
     validation_results: &Vec<UnitValidationResult>,
     current_time: &String,
 ) -> String {
-    let mut message = format!("Report Time: {}\n\n", current_time);
+    let mut message = format!("Report time: {}\n\n", current_time);
 
     for result in validation_results {
         let status_text = match result.status {

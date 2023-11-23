@@ -1,4 +1,3 @@
-use crate::PageResults;
 use scraper::{Html, Selector};
 use std::collections::HashMap;
 
@@ -7,6 +6,14 @@ pub struct EmailStatus {
     pub(crate) sent: usize,
     pub(crate) not_sent: usize,
     pub(crate) bulk: usize,
+}
+
+pub struct PageResults {
+    pub(crate) validated_payments_count: Option<usize>,
+    pub(crate) pdf_count: Option<usize>,
+    pub(crate) email_check_count: Option<EmailStatus>,
+    pub(crate) paid_vouchers_count: Option<usize>,
+    pub(crate) is_purchase_website_ok: Option<bool>,
 }
 
 fn count_paid_vouchers(html: &str) -> usize {
