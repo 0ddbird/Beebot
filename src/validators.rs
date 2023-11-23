@@ -1,4 +1,4 @@
-use crate::PageChecks;
+use crate::PageResults;
 
 #[derive(PartialEq)]
 pub enum Status {
@@ -13,18 +13,19 @@ pub struct UnitValidationResult {
     pub(crate) message: String,
 }
 
-pub fn validate_checks(page_checks: &PageChecks) -> Vec<UnitValidationResult> {
+pub fn validate(page_results: &PageResults) -> Vec<UnitValidationResult> {
     let payments_result = validate_count(
         "Validated payments",
         75,
-        page_checks.validated_payments_count,
+        page_results.validated_payments_count,
     );
-    let paid_vouchers_result = validate_count("Paid vouchers", 75, page_checks.paid_vouchers_count);
-    let pdf_count_result = validate_count("PDF count", 100, page_checks.pdf_count);
+    let paid_vouchers_result =
+        validate_count("Paid vouchers", 75, page_results.paid_vouchers_count);
+    let pdf_count_result = validate_count("PDF count", 100, page_results.pdf_count);
     let email_check_result =
-        validate_count("Email check count", 100, page_checks.email_check_count);
+        validate_count("Email check count", 100, page_results.email_check_count);
     let purchase_website_result =
-        validate_purchase_website_status("Purchase website", page_checks.is_purchase_website_ok);
+        validate_purchase_website_status("Purchase website", page_results.is_purchase_website_ok);
 
     vec![
         payments_result,

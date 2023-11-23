@@ -3,77 +3,34 @@ use std::env;
 use chrono::Local;
 use dotenv::dotenv;
 use log::info;
+use mail::send_mail;
 use simplelog::*;
 use std::fs::File;
 use tokio;
 
-mod integrations;
+extern crate diesel;
+
+use crate::db::{establish_connection, insert_results, LogEntry};
+use crate::slack::send_slack_message;
+use crate::validators::Status;
+
+mod db;
+mod mail;
 mod parser;
 mod requests;
+mod schema;
+mod slack;
 mod validators;
 
-use crate::integrations::{send_mail, send_slack_message};
-use crate::validators::{Status, UnitValidationResult};
 
-pub struct PageChecks {
+
+
+pub struct PageResults {
     validated_payments_count: Option<usize>,
     pdf_count: Option<usize>,
     email_check_count: Option<usize>,
     paid_vouchers_count: Option<usize>,
     is_purchase_website_ok: Option<bool>,
-}
-
-fn generate_slack_message(
-    validation_results: &Vec<UnitValidationResult>,
-    current_time: &String,
-) -> String {
-    let mut should_alert_channel = false;
-    let mut message = format!("*Report Time: {}*\n\n", current_time);
-
-    for result in validation_results {
-        if result.status == Status::Alert {
-            should_alert_channel = true;
-        }
-
-        let status_symbol = match result.status {
-            Status::Ok => ":white_check_mark:",
-            Status::Warning => ":warning:",
-            Status::Alert => ":fire:",
-        };
-        // Escaping "<" character for Slack
-        let formatted_message = result.message.replace("<", "&lt;");
-        message.push_str(&format!(
-            "{} {}: {}\n",
-            status_symbol, result.name, formatted_message
-        ));
-    }
-
-    if should_alert_channel {
-        message.push_str(&format!("<!channel>"));
-    }
-
-    message
-}
-
-fn generate_mail_content(
-    validation_results: &Vec<UnitValidationResult>,
-    current_time: &String,
-) -> String {
-    let mut message = format!("Report Time: {}\n\n", current_time);
-
-    for result in validation_results {
-        let status_text = match result.status {
-            Status::Ok => "✅",
-            Status::Warning => "⚠️",
-            Status::Alert => "🔥",
-        };
-        message.push_str(&format!(
-            "{} {}: {}\n",
-            status_text, result.name, result.message
-        ));
-    }
-
-    message
 }
 
 #[tokio::main]
@@ -84,18 +41,17 @@ async fn main() {
         Config::default(),
         File::create(log_file_name).unwrap(),
     );
-    info!("Beebot starting");
-
     dotenv().ok();
 
-    let api_token = env::var("API_TOKEN").unwrap();
+    info!("Beebot starting");
 
+    let db_url = env::var("DATABASE_URL").unwrap();
+    let api_token = env::var("API_TOKEN").unwrap();
     let slack_token = env::var("SLACK_API_TOKEN").unwrap();
     let slack_channel = env::var("SLACK_CHANNEL").unwrap();
-
-    let sendgrid_token = env::var("SENDGRID_API_TOKEN").unwrap();
-    let sendgrid_recipient = env::var("SENDGRID_RECIPIENT").unwrap();
-    let sendgrid_sender = env::var("SENDGRID_SENDER").unwrap();
+    let mail_token = env::var("SENDGRID_API_TOKEN").unwrap();
+    let mail_sender = env::var("SENDGRID_SENDER").unwrap();
+    let mail_recipient = env::var("SENDGRID_RECIPIENT").unwrap();
 
     let urls = vec![
         ("payments", env::var("URL_PAYMENTS").unwrap()),
@@ -106,38 +62,74 @@ async fn main() {
             env::var("URL_PURCHASE_WEBSITE").unwrap(),
         ),
     ];
+
     info!("Fetching pages content");
-    let pages = requests::fetch_html_pages(&api_token, &urls).await;
-    let page_checks = parser::parse_pages(&pages);
+    let pages = requests::request_pages(&api_token, &urls).await;
+    let page_results = parser::parse_pages(&pages);
 
     info!("Validating results");
-    let validation_result = validators::validate_checks(&page_checks);
-
+    let validation_results = validators::validate(&page_results);
     let current_time = Local::now().format("%H:%M").to_string();
 
     info!("Sending Slack message");
-    let slack_message = generate_slack_message(&validation_result, &current_time);
-    if let Err(e) = send_slack_message(&slack_token, &slack_channel, &slack_message).await {
-        eprintln!("Failed to send message to Slack: {}", e);
+    let mut is_slack_message_sent = false;
+    let slack_message = slack::compose_slack_message(&validation_results, &current_time);
+
+    match send_slack_message(&slack_token, &slack_channel, &slack_message).await {
+        Ok(_) => {
+            is_slack_message_sent = true;
+            info!("Slack message sent successfully");
+        }
+        Err(e) => {
+            eprintln!("Failed to send message to Slack: {}", e);
+        }
     }
 
-    if validation_result
+    let mut is_email_sent = false;
+    if validation_results
         .iter()
         .any(|result| result.status == Status::Alert)
     {
-        info!("Sending alert email");
-        let mail_body = generate_mail_content(&validation_result, &current_time);
+        let mail_body = mail::compose_mail_body(&validation_results, &current_time);
 
-        info!("Mail content:\n{}", mail_body);
-        if let Err(e) = send_mail(
-            &sendgrid_token,
-            &sendgrid_sender,
-            &sendgrid_recipient,
-            &mail_body,
-        )
-        .await
-        {
-            eprintln!("Failed to send email: {}", e);
+        info!("Sending alert email\nMail content:\n{}", mail_body);
+
+        match send_mail(&mail_token, &mail_sender, &mail_recipient, &mail_body).await {
+            Ok(_) => {
+                is_email_sent = true;
+                info!("Email sent successfully");
+            }
+            Err(e) => {
+                info!("Failed to send email: {}", e);
+            }
         }
     }
+
+    info!("Connecting to db");
+    let conn = establish_connection(&db_url);
+
+    match conn {
+        Ok(mut conn) => {
+            info!("Successfully initialized the database");
+            let log_entry = LogEntry {
+                payments: page_results.validated_payments_count.unwrap_or_default() as i32,
+                vouchers: page_results.paid_vouchers_count.unwrap_or_default() as i32,
+                pdf_count: page_results.pdf_count.unwrap_or_default() as i32,
+                email_count: page_results.email_check_count.unwrap_or_default() as i32,
+                website_ok: page_results.is_purchase_website_ok.unwrap_or_default(),
+                slack_sent: is_slack_message_sent,
+                email_sent: is_email_sent,
+            };
+            match insert_results(&mut conn, log_entry) {
+                Ok(_) => info!("Results successfully inserted into the database"),
+                Err(e) => eprintln!("Failed to insert results into the database: {:?}", e),
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to establish a database connection: {:?}", e);
+            return;
+        }
+    }
+
+    info!("Beebot shutdown");
 }

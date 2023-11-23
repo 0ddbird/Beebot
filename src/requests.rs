@@ -17,10 +17,7 @@ async fn fetch_html(url: &str, api_token: &str) -> Result<(String, String), reqw
     }
 }
 
-pub async fn fetch_html_pages(
-    api_token: &str,
-    urls: &Vec<(&str, String)>,
-) -> HashMap<String, String> {
+pub async fn request_pages(api_token: &str, urls: &Vec<(&str, String)>) -> HashMap<String, String> {
     let futures = urls
         .iter()
         .map(|(key, url)| {

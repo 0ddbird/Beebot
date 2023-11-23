@@ -1,4 +1,4 @@
-use crate::PageChecks;
+use crate::PageResults;
 use scraper::{Html, Selector};
 use std::collections::HashMap;
 
@@ -51,8 +51,8 @@ fn has_correct_content(html: &str) -> bool {
         .any(|element| element.inner_html().trim() == "Nos bons cadeaux - Le Quatrième Mur")
 }
 
-pub fn parse_pages(html_contents: &HashMap<String, String>) -> PageChecks {
-    let mut results = PageChecks {
+pub fn parse_pages(html_contents: &HashMap<String, String>) -> PageResults {
+    let mut results = PageResults {
         validated_payments_count: None,
         pdf_count: None,
         email_check_count: None,
