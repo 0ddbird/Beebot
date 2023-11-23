@@ -7,10 +7,16 @@ pub enum Status {
     Alert,
 }
 
+pub enum Value {
+    Count(usize),
+    Bool(bool),
+}
+
 pub struct UnitValidationResult {
     pub(crate) name: String,
     pub(crate) status: Status,
     pub(crate) message: String,
+    pub(crate) value: Value,
 }
 
 pub fn validate(page_results: &PageResults) -> Vec<UnitValidationResult> {
@@ -41,6 +47,7 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
         name: name.to_string(),
         status: Status::Alert,
         message: "".to_string(),
+        value: Value::Count(0),
     };
 
     match count {
@@ -50,10 +57,12 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
         }
         Some(c) if c < threshold => {
             result.message = format!("{} < {}", c, threshold);
+            result.value = Value::Count(c);
             result.status = Status::Warning;
         }
         Some(c) => {
             result.message = format!("{}", c);
+            result.value = Value::Count(c);
             result.status = Status::Ok;
         }
     }
@@ -66,12 +75,14 @@ fn validate_purchase_website_status(name: &str, is_ok: Option<bool>) -> UnitVali
         name: name.to_string(),
         status: Status::Alert,
         message: "passed".to_string(),
+        value: Value::Bool(false),
     };
 
     match is_ok {
         Some(true) => {
             result.message = "is OK".to_string();
             result.status = Status::Ok;
+            result.value = Value::Bool(true);
         }
         None | Some(false) => {
             result.message = "is DOWN".to_string();

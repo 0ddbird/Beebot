@@ -10,7 +10,7 @@ use tokio;
 
 extern crate diesel;
 
-use crate::db::{establish_connection, insert_results, LogEntry};
+use crate::db::{establish_connection, get_last_entry, insert_results, LogEntry};
 use crate::slack::send_slack_message;
 use crate::validators::Status;
 
@@ -21,9 +21,6 @@ mod requests;
 mod schema;
 mod slack;
 mod validators;
-
-
-
 
 pub struct PageResults {
     validated_payments_count: Option<usize>,
@@ -53,6 +50,9 @@ async fn main() {
     let mail_sender = env::var("SENDGRID_SENDER").unwrap();
     let mail_recipient = env::var("SENDGRID_RECIPIENT").unwrap();
 
+    info!("Connecting to db");
+    let mut conn = establish_connection(&db_url);
+
     let urls = vec![
         ("payments", env::var("URL_PAYMENTS").unwrap()),
         ("vouchers", env::var("URL_VOUCHERS").unwrap()),
@@ -71,9 +71,24 @@ async fn main() {
     let validation_results = validators::validate(&page_results);
     let current_time = Local::now().format("%H:%M").to_string();
 
+    let mut last_entry: Option<LogEntry> = None;
+
+    if let Ok(ref mut conn) = conn {
+        last_entry = match get_last_entry(conn) {
+            Ok(entry) => Some(entry),
+            Err(e) => {
+                info!("Error fetching last entry: {:?}", e);
+                None
+            }
+        };
+    } else {
+        info!("Database connection failed. Continuing without database operations.");
+    }
+
     info!("Sending Slack message");
     let mut is_slack_message_sent = false;
-    let slack_message = slack::compose_slack_message(&validation_results, &current_time);
+    let slack_message =
+        slack::compose_slack_message(&validation_results, last_entry, &current_time);
 
     match send_slack_message(&slack_token, &slack_channel, &slack_message).await {
         Ok(_) => {
@@ -105,30 +120,25 @@ async fn main() {
         }
     }
 
-    info!("Connecting to db");
-    let conn = establish_connection(&db_url);
-
-    match conn {
-        Ok(mut conn) => {
-            info!("Successfully initialized the database");
-            let log_entry = LogEntry {
-                payments: page_results.validated_payments_count.unwrap_or_default() as i32,
-                vouchers: page_results.paid_vouchers_count.unwrap_or_default() as i32,
-                pdf_count: page_results.pdf_count.unwrap_or_default() as i32,
-                email_count: page_results.email_check_count.unwrap_or_default() as i32,
-                website_ok: page_results.is_purchase_website_ok.unwrap_or_default(),
-                slack_sent: is_slack_message_sent,
-                email_sent: is_email_sent,
-            };
-            match insert_results(&mut conn, log_entry) {
-                Ok(_) => info!("Results successfully inserted into the database"),
-                Err(e) => eprintln!("Failed to insert results into the database: {:?}", e),
-            }
+    if let Ok(ref mut conn) = conn {
+        info!("Successfully initialized the database");
+        let log_entry = LogEntry {
+            id: None,
+            payments: page_results.validated_payments_count.unwrap_or_default() as i32,
+            vouchers: page_results.paid_vouchers_count.unwrap_or_default() as i32,
+            pdf_count: page_results.pdf_count.unwrap_or_default() as i32,
+            email_count: page_results.email_check_count.unwrap_or_default() as i32,
+            website_ok: page_results.is_purchase_website_ok.unwrap_or_default(),
+            slack_sent: is_slack_message_sent,
+            email_sent: is_email_sent,
+            datetime: None,
+        };
+        match insert_results(conn, log_entry) {
+            Ok(_) => info!("Results successfully inserted into the database"),
+            Err(e) => eprintln!("Failed to insert results into the database: {:?}", e),
         }
-        Err(e) => {
-            eprintln!("Failed to establish a database connection: {:?}", e);
-            return;
-        }
+    } else {
+        info!("Failed to establish a database connection");
     }
 
     info!("Beebot shutdown");
