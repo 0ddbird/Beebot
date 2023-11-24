@@ -17,10 +17,14 @@ fn get_corresponding_value(name: &str, log_entry: &LogEntry) -> Value {
 pub fn create_message(
     validation_results: &Vec<UnitValidationResult>,
     last_record: Option<LogEntry>,
-    current_time: &String,
+    is_test_mode: bool,
 ) -> String {
     let mut should_alert_channel = false;
-    let mut message = format!("*Report time: {}*\n\n", current_time);
+    let mut message = "".to_string();
+
+    if is_test_mode {
+        message.push_str("*THIS IS A TEST*\n");
+    }
 
     for result in validation_results {
         if result.status == Status::Alert {
@@ -35,27 +39,27 @@ pub fn create_message(
             trend_icon = match (last_record_value, &result.value) {
                 (Value::Count(last_count), Value::Count(current_count)) => {
                     if current_count > &last_count {
-                        ":chart_with_upwards_trend:".to_string()
+                        ":trend_up:".to_string()
                     } else if current_count < &last_count {
-                        ":chart_with_downwards_trend:".to_string()
+                        ":trend_down:".to_string()
                     } else {
-                        "".to_string()
+                        ":blank:".to_string()
                     }
                 }
-                _ => "".to_string(),
+                _ => ":blank:".to_string(),
             };
         }
 
         let status_symbol = match result.status {
-            Status::Ok => ":white_check_mark:",
-            Status::Warning => ":warning:",
-            Status::Alert => ":x:",
+            Status::Ok => ":square_check:",
+            Status::Warning => ":square_neutral:",
+            Status::Alert => ":square_x:",
         };
         // Escaping "<" character for Slack
         let formatted_message = result.message.replace("<", "&lt;");
         message.push_str(&format!(
-            "{} {}: {} {}\n",
-            status_symbol, result.name, formatted_message, trend_icon
+            "{}{} {}: {}\n",
+            status_symbol, trend_icon, result.name, formatted_message
         ));
     }
 

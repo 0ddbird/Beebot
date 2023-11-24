@@ -1,7 +1,7 @@
 use crate::parser::PageResults;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use log::info;
+use log::{error, info};
 
 use crate::schema::activity_logs;
 use crate::schema::activity_logs::dsl::*;
@@ -20,7 +20,7 @@ pub struct LogEntry {
     pub(crate) datetime: Option<String>,
 }
 
-pub fn establish_connection(db_url: &str) -> Result<SqliteConnection, ConnectionError> {
+pub fn load_db(db_url: &str) -> Result<SqliteConnection, ConnectionError> {
     let database_url = db_url;
     SqliteConnection::establish(&database_url)
 }
@@ -52,12 +52,12 @@ pub fn create_log(
 pub fn insert_log(conn: &mut SqliteConnection, log_entry: LogEntry) {
     match diesel::insert_into(activity_logs)
         .values(&log_entry)
-        .execute(conn) {
+        .execute(conn)
+    {
         Ok(_) => info!("Results inserted into the database"),
-        Err(e) => info!("Failed to insert results into the database: {:?}", e),
+        Err(e) => error!("Failed to insert results into the database: {:?}", e),
     }
 }
-
 
 pub fn get_last_record(conn: &mut Result<SqliteConnection, ConnectionError>) -> Option<LogEntry> {
     match conn {
@@ -67,12 +67,12 @@ pub fn get_last_record(conn: &mut Result<SqliteConnection, ConnectionError>) -> 
                 Some(entry)
             }
             Err(e) => {
-                info!("Error fetching last entry: {:?}", e);
+                error!("Error fetching last entry: {:?}", e);
                 None
             }
         },
         Err(_) => {
-            info!("Database connection failed. Continuing without database operations.");
+            error!("Database connection failed. Continuing without database operations.");
             None
         }
     }

@@ -15,7 +15,7 @@ pub struct Environment {
     pub(crate) mail_recipient: String,
     pub(crate) urls: Vec<(&'static str, String)>,
 }
-pub fn get_environment() -> Environment {
+pub fn load_environment() -> Environment {
     let db_url = env::var("DATABASE_URL").unwrap();
     let api_token = env::var("API_TOKEN").unwrap();
     let slack_token = env::var("SLACK_API_TOKEN").unwrap();
@@ -48,7 +48,7 @@ pub fn get_environment() -> Environment {
     environment
 }
 
-pub fn get_logfile() -> Result<(), Box<dyn std::error::Error>> {
+pub fn load_logfile() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all("logs").expect("Failed to create logs directory");
     let log_file_name = format!("logs/{}.log", Local::now().format("%Y_%m_%d_%H-%M-%S"));
     let _ = WriteLogger::init(

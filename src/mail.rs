@@ -1,11 +1,16 @@
 use crate::validators::{Status, UnitValidationResult};
 use serde_json::json;
+use std::string::String;
 
 pub fn compose_mail_body(
     validation_results: &Vec<UnitValidationResult>,
-    current_time: &String,
+    is_test_mode: bool,
 ) -> String {
-    let mut message = format!("Report time: {}\n\n", current_time);
+    let mut message = "".to_string();
+
+    if is_test_mode {
+        message.push_str("THIS IS A TEST\n");
+    }
 
     for result in validation_results {
         let status_text = match result.status {
@@ -27,7 +32,16 @@ pub async fn send_mail(
     from: &str,
     to: &str,
     body: &str,
+    is_test_mode: bool,
 ) -> Result<(), reqwest::Error> {
+    let test_subject = if is_test_mode {
+        "THIS IS A TEST - "
+    } else {
+        ""
+    }
+    .to_string();
+    let subject = format!("🚨 {} EMERGENCY | Issue with MBB app", test_subject);
+
     let client = reqwest::Client::new();
     let res = client
         .post("https://api.sendgrid.com/v3/mail/send")
@@ -35,7 +49,7 @@ pub async fn send_mail(
         .json(&json!({
             "personalizations": [{
                 "to": [{"email": to}],
-                "subject": "🚨 EMERGENCY | Issue with MBB app"
+                "subject": subject
             }],
             "from": {"email": from},
             "content": [{

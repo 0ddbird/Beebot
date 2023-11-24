@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use futures::future;
-use log::info;
+use log::error;
 use reqwest;
 
 async fn fetch_html(url: &str, api_token: &str) -> Result<(String, String), reqwest::Error> {
@@ -19,7 +19,15 @@ async fn fetch_html(url: &str, api_token: &str) -> Result<(String, String), reqw
     }
 }
 
-pub async fn request_pages(api_token: &str, urls: &Vec<(&str, String)>) -> HashMap<String, String> {
+pub async fn request_pages(
+    api_token: &str,
+    urls: &Vec<(&str, String)>,
+    is_test_mode: bool,
+) -> HashMap<String, String> {
+    if is_test_mode {
+        return HashMap::new();
+    }
+
     let futures = urls
         .iter()
         .map(|(key, url)| {
@@ -39,7 +47,7 @@ pub async fn request_pages(api_token: &str, urls: &Vec<(&str, String)>) -> HashM
                 html_contents.insert(key, html);
             }
             Err(e) => {
-                info!("Error: {}", e)
+                error!("Error while fetching pages: {}", e)
             }
         }
     }

@@ -77,7 +77,7 @@ fn has_correct_content(html: &str) -> bool {
         .any(|element| element.inner_html().trim() == "Nos bons cadeaux - Le Quatrième Mur")
 }
 
-pub fn parse_pages(html_contents: &HashMap<String, String>) -> PageResults {
+pub fn extract_metrics(html_contents: &HashMap<String, String>, is_test_mode: bool) -> PageResults {
     let mut results = PageResults {
         validated_payments_count: None,
         pdf_count: None,
@@ -85,6 +85,20 @@ pub fn parse_pages(html_contents: &HashMap<String, String>) -> PageResults {
         paid_vouchers_count: None,
         is_purchase_website_ok: None,
     };
+
+    if is_test_mode {
+        results = PageResults {
+            validated_payments_count: Some(76),
+            pdf_count: Some(74),
+            email_check_count: Some(EmailStatus {
+                sent: 30,
+                not_sent: 50,
+                bulk: 20,
+            }),
+            paid_vouchers_count: Some(100),
+            is_purchase_website_ok: Some(false),
+        }
+    }
 
     if let Some(html) = html_contents.get("payments") {
         results.validated_payments_count = Some(count_validated_payments(html));
