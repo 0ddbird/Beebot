@@ -9,7 +9,7 @@ pub fn compose_mail_body(
     let mut message = "".to_string();
 
     if is_test_mode {
-        message.push_str("THIS IS A TEST\n");
+        message.push_str("THIS IS A TEST\n\n");
     }
 
     for result in validation_results {
@@ -18,9 +18,10 @@ pub fn compose_mail_body(
             Status::Warning => "⚠️",
             Status::Alert => "❌",
         };
+        let clean_message = result.message.replace('`', "");
         message.push_str(&format!(
             "{} {}: {}\n",
-            status_text, result.name, result.message
+            status_text, result.name, clean_message
         ));
     }
 

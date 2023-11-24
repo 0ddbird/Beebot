@@ -104,12 +104,12 @@ pub fn extract_metrics(html_contents: &HashMap<String, String>, is_test_mode: bo
         results.validated_payments_count = Some(count_validated_payments(html));
     }
 
-    if let Some(html) = html_contents.get("vouchers") {
+    if let Some(html) = html_contents.get("paid_vouchers") {
         results.pdf_count = Some(count_pdf(html));
         results.email_check_count = Some(count_email_statuses(html));
     }
 
-    if let Some(html) = html_contents.get("paid_vouchers") {
+    if let Some(html) = html_contents.get("vouchers") {
         results.paid_vouchers_count = Some(count_paid_vouchers(html));
     }
 
