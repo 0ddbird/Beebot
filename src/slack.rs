@@ -77,7 +77,8 @@ pub async fn post_message(token: &str, channel: &str, message: &str) -> Result<(
         .bearer_auth(token)
         .json(&json!({
             "channel": channel,
-            "text": message
+            "text": message,
+            "unfurl_links": false,
         }))
         .send()
         .await?;
