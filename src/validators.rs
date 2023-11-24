@@ -1,6 +1,10 @@
+use std::fmt::{Display, Formatter, Result};
+
+use chrono::prelude::*;
+use chrono_tz::Europe::Paris;
+
 use crate::parser::EmailStatus;
 use crate::parser::PageResults;
-use std::fmt::{Display, Formatter, Result};
 
 #[derive(PartialEq)]
 pub enum Status {
@@ -30,20 +34,37 @@ pub struct UnitValidationResult {
     pub(crate) value: Value,
 }
 
-pub fn validate(pages: &PageResults) -> Vec<UnitValidationResult> {
-    let payments_result = validate_count("Validated payments", 75, pages.validated_payments_count);
-    let paid_vouchers_result = validate_count("Paid vouchers", 75, pages.paid_vouchers_count);
-    let pdf_count_result = validate_count("PDF count", 75, pages.pdf_count);
-    let emails_result = validate_status("Email count", pages.email_check_count);
+fn get_threshold(threshold_day: usize, threshold_night: usize) -> usize {
+    let paris_time = Local::now().with_timezone(&Paris);
+    let hour = paris_time.hour();
+    if hour >= 8 && hour < 23 {
+        threshold_day
+    } else {
+        threshold_night
+    }
+}
+
+pub fn validate(pages: &PageResults) -> Vec<(UnitValidationResult, String)> {
+    let threshold = get_threshold(75, 50);
+
+    let payments_result = validate_count(
+        "Validated payments",
+        threshold,
+        pages.validated_payments_count,
+    );
+    let paid_vouchers_result =
+        validate_count("Paid vouchers", threshold, pages.paid_vouchers_count);
+    let pdf_count_result = validate_count("PDF count", threshold, pages.pdf_count);
+    let emails_result = validate_status("Email count", threshold, pages.email_check_count);
     let purchase_website_result =
         validate_purchase_website_status("Purchase website", pages.is_purchase_website_ok);
 
     vec![
-        payments_result,
-        paid_vouchers_result,
-        pdf_count_result,
-        emails_result,
-        purchase_website_result,
+        (payments_result, pages.url_validated_payments.clone()),
+        (paid_vouchers_result, pages.url_vouchers_count.clone()),
+        (pdf_count_result, pages.url_pdf_count.clone()),
+        (emails_result, pages.url_email_check_count.clone()),
+        (purchase_website_result, pages.url_purchase_website.clone()),
     ]
 }
 
@@ -65,6 +86,9 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
             if c == 100 {
                 result.status = Status::Ok;
                 result.message = format!("`{}`", c);
+            } else if c >= 85 && ["Validated payments", "Paid vouchers"].contains(&name) {
+                result.status = Status::Ok;
+                result.message = format!("`{} (>{})`", c, threshold);
             } else if c > threshold {
                 result.status = Status::Warning;
                 result.message = format!("`{} (>{})`", c, threshold);
@@ -78,7 +102,11 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
     result
 }
 
-fn validate_status(name: &str, statuses: Option<EmailStatus>) -> UnitValidationResult {
+fn validate_status(
+    name: &str,
+    threshold: usize,
+    statuses: Option<EmailStatus>,
+) -> UnitValidationResult {
     let mut result = UnitValidationResult {
         name: name.to_string(),
         status: Status::Alert,
@@ -96,7 +124,7 @@ fn validate_status(name: &str, statuses: Option<EmailStatus>) -> UnitValidationR
 
         result.status = if sent_percentage == 100.0 {
             Status::Ok
-        } else if sent_percentage > 75.0 {
+        } else if sent_percentage > threshold as f64 {
             Status::Warning
         } else {
             Status::Alert

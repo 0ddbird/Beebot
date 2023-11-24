@@ -1,3 +1,4 @@
+use crate::requests::Page;
 use scraper::{Html, Selector};
 use std::collections::HashMap;
 
@@ -10,10 +11,15 @@ pub struct EmailStatus {
 
 pub struct PageResults {
     pub(crate) validated_payments_count: Option<usize>,
+    pub(crate) paid_vouchers_count: Option<usize>,
     pub(crate) pdf_count: Option<usize>,
     pub(crate) email_check_count: Option<EmailStatus>,
-    pub(crate) paid_vouchers_count: Option<usize>,
     pub(crate) is_purchase_website_ok: Option<bool>,
+    pub(crate) url_validated_payments: String,
+    pub(crate) url_vouchers_count: String,
+    pub(crate) url_pdf_count: String,
+    pub(crate) url_email_check_count: String,
+    pub(crate) url_purchase_website: String,
 }
 
 fn count_paid_vouchers(html: &str) -> usize {
@@ -77,49 +83,62 @@ fn has_correct_content(html: &str) -> bool {
         .any(|element| element.inner_html().trim() == "Nos bons cadeaux - Le Quatrième Mur")
 }
 
-pub fn extract_metrics(html_contents: &HashMap<String, String>, is_test_mode: bool) -> PageResults {
+pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool) -> PageResults {
     let mut results = PageResults {
         validated_payments_count: None,
         pdf_count: None,
         email_check_count: None,
         paid_vouchers_count: None,
         is_purchase_website_ok: None,
+        url_validated_payments: "".to_string(),
+        url_vouchers_count: "".to_string(),
+        url_pdf_count: "".to_string(),
+        url_email_check_count: "".to_string(),
+        url_purchase_website: "".to_string(),
     };
 
     if is_test_mode {
         results = PageResults {
-            validated_payments_count: Some(76),
-            pdf_count: Some(74),
+            validated_payments_count: Some(75),
+            paid_vouchers_count: Some(85),
+            pdf_count: Some(76),
             email_check_count: Some(EmailStatus {
                 sent: 30,
                 not_sent: 50,
                 bulk: 20,
             }),
-            paid_vouchers_count: Some(100),
             is_purchase_website_ok: Some(false),
+            url_validated_payments: "https://test-domain.com".to_string(),
+            url_vouchers_count: "https://test-domain.com".to_string(),
+            url_pdf_count: "https://test-domain.com".to_string(),
+            url_email_check_count: "https://test-domain.com".to_string(),
+            url_purchase_website: "https://test-domain.com".to_string(),
         }
     }
 
-    if let Some(html) = html_contents.get("payments") {
-        results.validated_payments_count = Some(count_validated_payments(html));
+    if let Some(page) = html_contents.get("payments") {
+        results.validated_payments_count = Some(count_validated_payments(&page.html));
+        results.url_validated_payments = page.url.clone();
     }
 
-    if let Some(html) = html_contents.get("paid_vouchers") {
-        results.pdf_count = Some(count_pdf(html));
-        results.email_check_count = Some(count_email_statuses(html));
+    if let Some(page) = html_contents.get("paid_vouchers") {
+        results.pdf_count = Some(count_pdf(&page.html));
+        results.email_check_count = Some(count_email_statuses(&page.html));
+        let url = page.url.clone();
+        results.url_pdf_count = url.clone();
+        results.url_email_check_count = url;
     }
 
-    if let Some(html) = html_contents.get("vouchers") {
-        results.paid_vouchers_count = Some(count_paid_vouchers(html));
+    if let Some(page) = html_contents.get("vouchers") {
+        results.paid_vouchers_count = Some(count_paid_vouchers(&page.html));
+        results.url_vouchers_count = page.url.clone();
     }
 
-    match html_contents.get("purchase_website") {
-        Some(html) if has_correct_content(html) => {
-            results.is_purchase_website_ok = Some(true);
-        }
-        _ => {
-            results.is_purchase_website_ok = Some(false);
-        }
+    if let Some(page) = html_contents.get("purchase_website") {
+        results.url_purchase_website = page.url.clone();
+        results.is_purchase_website_ok = Some(has_correct_content(&page.html));
+    } else {
+        results.is_purchase_website_ok = Some(false);
     }
 
     results

@@ -15,7 +15,7 @@ fn get_corresponding_value(name: &str, log_entry: &LogEntry) -> Value {
 }
 
 pub fn create_message(
-    validation_results: &Vec<UnitValidationResult>,
+    validation_results: &Vec<(UnitValidationResult, String)>,
     last_record: Option<LogEntry>,
     is_test_mode: bool,
 ) -> String {
@@ -26,7 +26,7 @@ pub fn create_message(
         message.push_str("*THIS IS A TEST*\n");
     }
 
-    for result in validation_results {
+    for (result, url) in validation_results {
         if result.status == Status::Alert {
             should_alert_channel = true;
         }
@@ -55,12 +55,12 @@ pub fn create_message(
             Status::Warning => ":square_neutral:",
             Status::Alert => ":square_x:",
         };
-        // Escaping "<" character for Slack
-        let formatted_message = result.message.replace("<", "&lt;");
+
         message.push_str(&format!(
-            "{}{} {}: {}\n",
-            status_symbol, trend_icon, result.name, formatted_message
+            "{}{} {}: {} | ",
+            status_symbol, trend_icon, result.name, result.message
         ));
+        message.push_str(&format!("<{}| View>\n", url));
     }
 
     if should_alert_channel {

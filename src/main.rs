@@ -50,8 +50,8 @@ async fn main() {
 
     // Fetch + Parse
     info!("Fetching pages content");
-    let html_pages = requests::request_pages(&env.api_token, &env.urls, is_test_mode).await;
-    let metrics = parser::extract_metrics(&html_pages, is_test_mode);
+    let pages = requests::request_pages(&env.api_token, &env.urls, is_test_mode).await;
+    let metrics = parser::extract_metrics(&pages, is_test_mode);
 
     // Metrics validation
     info!("Validating data from HTML content");
@@ -78,7 +78,9 @@ async fn main() {
     info!("\n{}", mail_body);
     let mut is_email_sent = false;
 
-    let needs_alert = results.iter().any(|result| result.status == Status::Alert);
+    let needs_alert = results
+        .iter()
+        .any(|(result, _)| result.status == Status::Alert);
 
     if needs_alert {
         info!("Sending alert email\nMail content:\n{}", mail_body);

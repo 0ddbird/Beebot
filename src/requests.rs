@@ -4,6 +4,11 @@ use futures::future;
 use log::error;
 use reqwest;
 
+pub struct Page {
+    pub(crate) url: String,
+    pub(crate) html: String,
+}
+
 async fn fetch_html(url: &str, api_token: &str) -> Result<(String, String), reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client
@@ -23,7 +28,7 @@ pub async fn request_pages(
     api_token: &str,
     urls: &Vec<(&str, String)>,
     is_test_mode: bool,
-) -> HashMap<String, String> {
+) -> HashMap<String, Page> {
     if is_test_mode {
         return HashMap::new();
     }
@@ -43,8 +48,9 @@ pub async fn request_pages(
 
     for (key, result) in results {
         match result {
-            Ok((_, html)) => {
-                html_contents.insert(key, html);
+            Ok((url, html)) => {
+                let page = Page { url, html };
+                html_contents.insert(key, page);
             }
             Err(e) => {
                 error!("Error while fetching pages: {}", e)

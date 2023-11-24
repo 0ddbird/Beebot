@@ -3,7 +3,7 @@ use serde_json::json;
 use std::string::String;
 
 pub fn compose_mail_body(
-    validation_results: &Vec<UnitValidationResult>,
+    validation_results: &Vec<(UnitValidationResult, String)>,
     is_test_mode: bool,
 ) -> String {
     let mut message = "".to_string();
@@ -12,7 +12,7 @@ pub fn compose_mail_body(
         message.push_str("THIS IS A TEST\n\n");
     }
 
-    for result in validation_results {
+    for (result, _) in validation_results {
         let status_text = match result.status {
             Status::Ok => "✅",
             Status::Warning => "⚠️",
@@ -21,7 +21,7 @@ pub fn compose_mail_body(
         let clean_message = result.message.replace('`', "");
         message.push_str(&format!(
             "{} {}: {}\n",
-            status_text, result.name, clean_message
+            status_text, result.name, clean_message,
         ));
     }
 
