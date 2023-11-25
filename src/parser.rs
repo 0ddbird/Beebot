@@ -3,17 +3,24 @@ use scraper::{Html, Selector};
 use std::collections::HashMap;
 
 #[derive(Default, Copy, Clone)]
-pub struct EmailStatus {
+pub struct EmailStatuses {
     pub(crate) sent: usize,
     pub(crate) not_sent: usize,
     pub(crate) bulk: usize,
 }
 
+#[derive(Default, Copy, Clone)]
+pub struct VoucherStatuses {
+    pub(crate) paid: usize,
+    pub(crate) error: usize,
+    pub(crate) other: usize,
+}
+
 pub struct PageResults {
     pub(crate) validated_payments_count: Option<usize>,
-    pub(crate) paid_vouchers_count: Option<usize>,
+    pub(crate) paid_vouchers_count: Option<VoucherStatuses>,
     pub(crate) pdf_count: Option<usize>,
-    pub(crate) email_check_count: Option<EmailStatus>,
+    pub(crate) email_check_count: Option<EmailStatuses>,
     pub(crate) is_purchase_website_ok: Option<bool>,
     pub(crate) url_validated_payments: String,
     pub(crate) url_vouchers_count: String,
@@ -22,14 +29,25 @@ pub struct PageResults {
     pub(crate) url_purchase_website: String,
 }
 
-fn count_paid_vouchers(html: &str) -> usize {
+fn count_vouchers_statuses(html: &str) -> VoucherStatuses {
     let document = Html::parse_document(html);
     let selector = Selector::parse("td.field-state").unwrap();
 
-    document
-        .select(&selector)
-        .filter(|element| element.inner_html().trim() == "Paid")
-        .count()
+    let mut voucher_status = VoucherStatuses {
+        paid: 0,
+        error: 0,
+        other: 0,
+    };
+
+    for element in document.select(&selector) {
+        match element.inner_html().trim() {
+            "Paid" => voucher_status.paid += 1,
+            "Error" => voucher_status.error += 1,
+            _ => voucher_status.other += 1,
+        }
+    }
+
+    voucher_status
 }
 
 fn count_pdf(html: &str) -> usize {
@@ -42,11 +60,11 @@ fn count_pdf(html: &str) -> usize {
         .count()
 }
 
-fn count_email_statuses(html: &str) -> EmailStatus {
+fn count_email_statuses(html: &str) -> EmailStatuses {
     let document = Html::parse_document(html);
     let selector = Selector::parse("td.field-_has_been_sent").unwrap();
 
-    let mut email_status = EmailStatus {
+    let mut email_status = EmailStatuses {
         sent: 0,
         not_sent: 0,
         bulk: 0,
@@ -99,10 +117,14 @@ pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool
 
     if is_test_mode {
         results = PageResults {
-            validated_payments_count: Some(75),
-            paid_vouchers_count: Some(85),
+            validated_payments_count: Some(85),
+            paid_vouchers_count: Some(VoucherStatuses {
+                paid: 40,
+                error: 10,
+                other: 50,
+            }),
             pdf_count: Some(76),
-            email_check_count: Some(EmailStatus {
+            email_check_count: Some(EmailStatuses {
                 sent: 30,
                 not_sent: 50,
                 bulk: 20,
@@ -130,7 +152,7 @@ pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool
     }
 
     if let Some(page) = html_contents.get("vouchers") {
-        results.paid_vouchers_count = Some(count_paid_vouchers(&page.html));
+        results.paid_vouchers_count = Some(count_vouchers_statuses(&page.html));
         results.url_vouchers_count = page.url.clone();
     }
 

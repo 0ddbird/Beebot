@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter, Result};
 use chrono::prelude::*;
 use chrono_tz::Europe::Paris;
 
-use crate::parser::EmailStatus;
 use crate::parser::PageResults;
+use crate::parser::{EmailStatuses, VoucherStatuses};
 
 #[derive(PartialEq)]
 pub enum Status {
@@ -53,9 +53,9 @@ pub fn validate(pages: &PageResults) -> Vec<(UnitValidationResult, String)> {
         pages.validated_payments_count,
     );
     let paid_vouchers_result =
-        validate_count("Paid vouchers", threshold, pages.paid_vouchers_count);
+        validate_voucher_status("Paid vouchers", threshold, pages.paid_vouchers_count);
     let pdf_count_result = validate_count("PDF count", threshold, pages.pdf_count);
-    let emails_result = validate_status("Email count", threshold, pages.email_check_count);
+    let emails_result = validate_email_status("Email count", threshold, pages.email_check_count);
     let purchase_website_result =
         validate_purchase_website_status("Purchase website", pages.is_purchase_website_ok);
 
@@ -102,10 +102,49 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
     result
 }
 
-fn validate_status(
+fn validate_voucher_status(
     name: &str,
     threshold: usize,
-    statuses: Option<EmailStatus>,
+    vouchers: Option<VoucherStatuses>,
+) -> UnitValidationResult {
+    let mut result = UnitValidationResult {
+        name: name.to_string(),
+        status: Status::Alert,
+        message: "".to_string(),
+        value: Value::Count(0),
+    };
+
+    if let Some(voucher) = vouchers {
+        let total_vouchers = voucher.paid + voucher.error;
+        let paid_percentage = if total_vouchers > 0 {
+            (voucher.paid as f64 / total_vouchers as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        result.status = if paid_percentage == 100.0 {
+            Status::Ok
+        } else if paid_percentage > threshold as f64 {
+            Status::Warning
+        } else {
+            Status::Alert
+        };
+
+        result.value = Value::Count(voucher.paid);
+
+        result.message = format!(
+            "`{} PAID`, `{} ERROR`, `{} OTHER`",
+            voucher.paid, voucher.error, voucher.other
+        );
+    }
+
+    result
+}
+
+fn validate_email_status(
+    name: &str,
+    threshold: usize,
+    statuses: Option<EmailStatuses>,
 ) -> UnitValidationResult {
     let mut result = UnitValidationResult {
         name: name.to_string(),

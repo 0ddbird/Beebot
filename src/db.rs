@@ -33,7 +33,7 @@ pub fn create_log(
     let mut log_entry = LogEntry {
         id: None,
         payments: page_results.validated_payments_count.unwrap_or_default() as i32,
-        vouchers: page_results.paid_vouchers_count.unwrap_or_default() as i32,
+        vouchers: 0,
         pdf_count: page_results.pdf_count.unwrap_or_default() as i32,
         email_count: 0,
         website_ok: page_results.is_purchase_website_ok.unwrap_or_default(),
@@ -41,6 +41,10 @@ pub fn create_log(
         email_sent: is_email_sent,
         datetime: None,
     };
+
+    if let Some(voucher) = page_results.paid_vouchers_count {
+        log_entry.vouchers = voucher.paid as i32;
+    }
 
     if let Some(email_status) = page_results.email_check_count {
         log_entry.email_count = email_status.sent as i32;

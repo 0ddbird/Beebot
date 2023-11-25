@@ -56,11 +56,17 @@ pub fn create_message(
             Status::Alert => ":square_x:",
         };
 
+        let link = if [Status::Warning, Status::Alert].contains(&result.status) {
+            format!(" | <{}| View>\n", url)
+        } else {
+            "\n".to_string()
+        };
+
         message.push_str(&format!(
-            "{}{} {}: {} | ",
+            "{}{} {}: {}",
             status_symbol, trend_icon, result.name, result.message
         ));
-        message.push_str(&format!("<{}| View>\n", url));
+        message.push_str(&link);
     }
 
     if should_alert_channel {
