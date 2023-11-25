@@ -1,7 +1,8 @@
-use crate::db::LogEntry;
-use crate::validators::{Status, UnitValidationResult, Value};
 use reqwest;
 use serde_json::json;
+
+use crate::db::LogEntry;
+use crate::validators::{Status, UnitValidationResult, Value};
 
 fn get_corresponding_value(name: &str, log_entry: &LogEntry) -> Value {
     match name {
@@ -16,7 +17,7 @@ fn get_corresponding_value(name: &str, log_entry: &LogEntry) -> Value {
 
 pub fn create_message(
     validation_results: &Vec<(UnitValidationResult, String)>,
-    last_record: Option<LogEntry>,
+    last_log: Option<LogEntry>,
     is_test_mode: bool,
 ) -> String {
     let mut should_alert_channel = false;
@@ -33,10 +34,10 @@ pub fn create_message(
 
         let mut trend_icon = String::new();
 
-        if let Some(ref entry) = last_record {
-            let last_record_value = get_corresponding_value(&result.name, entry);
+        if let Some(ref entry) = last_log {
+            let last_log_value = get_corresponding_value(&result.name, entry);
 
-            trend_icon = match (last_record_value, &result.value) {
+            trend_icon = match (last_log_value, &result.value) {
                 (Value::Count(last_count), Value::Count(current_count)) => {
                     if current_count > &last_count {
                         ":trend_up:".to_string()

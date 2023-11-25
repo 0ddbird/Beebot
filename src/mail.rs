@@ -1,6 +1,8 @@
-use crate::validators::{Status, UnitValidationResult};
-use serde_json::json;
 use std::string::String;
+
+use serde_json::json;
+
+use crate::validators::{Status, UnitValidationResult};
 
 pub fn compose_mail_body(
     validation_results: &Vec<(UnitValidationResult, String)>,
@@ -41,7 +43,7 @@ pub async fn send_mail(
         ""
     }
     .to_string();
-    let subject = format!("🚨 {} EMERGENCY | Issue with MBB app", test_subject);
+    let subject = format!("🚨 {} EMERGENCY | Issue with app", test_subject);
 
     let client = reqwest::Client::new();
     let res = client

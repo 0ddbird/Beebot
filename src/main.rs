@@ -5,7 +5,7 @@ use tokio;
 
 extern crate diesel;
 
-use crate::db::{get_last_record, load_db, LogEntry};
+use crate::db::{get_last_log, load_db, LogEntry};
 use crate::mail::send_mail;
 use crate::utils::{load_environment, load_logfile};
 use crate::validators::Status;
@@ -56,10 +56,10 @@ async fn main() {
     // Metrics validation
     info!("Validating data from HTML content");
     let results = validators::validate(&metrics);
-    let last_record: Option<LogEntry> = get_last_record(&mut conn);
+    let last_log: Option<LogEntry> = get_last_log(&mut conn);
 
     // Generate and send Slack message
-    let slack_message = slack::create_message(&results, last_record, is_test_mode);
+    let slack_message = slack::create_message(&results, last_log, is_test_mode);
     info!("Sending Slack message:\n{}\n", slack_message);
     let is_slack_message_sent =
         match slack::post_message(&env.slack_token, &env.slack_channel, &slack_message).await {

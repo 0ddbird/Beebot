@@ -1,6 +1,8 @@
-use crate::requests::Page;
-use scraper::{Html, Selector};
 use std::collections::HashMap;
+
+use scraper::{Html, Selector};
+
+use crate::requests::Page;
 
 #[derive(Default, Copy, Clone)]
 pub struct EmailStatuses {

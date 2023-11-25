@@ -1,8 +1,8 @@
-use crate::parser::PageResults;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use log::{error, info};
 
+use crate::parser::PageResults;
 use crate::schema::activity_logs;
 use crate::schema::activity_logs::dsl::*;
 
@@ -63,7 +63,7 @@ pub fn insert_log(conn: &mut SqliteConnection, log_entry: LogEntry) {
     }
 }
 
-pub fn get_last_record(conn: &mut Result<SqliteConnection, ConnectionError>) -> Option<LogEntry> {
+pub fn get_last_log(conn: &mut Result<SqliteConnection, ConnectionError>) -> Option<LogEntry> {
     match conn {
         Ok(conn) => match activity_logs.order(id.desc()).first(conn) {
             Ok(entry) => {

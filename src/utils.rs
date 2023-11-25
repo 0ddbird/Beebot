@@ -1,9 +1,8 @@
 use std::env;
 use std::fs::{self, File};
 
-use simplelog::*;
-
 use chrono::Local;
+use simplelog::*;
 
 pub struct Environment {
     pub(crate) db_url: String,
@@ -15,6 +14,7 @@ pub struct Environment {
     pub(crate) mail_recipient: String,
     pub(crate) urls: Vec<(&'static str, String)>,
 }
+
 pub fn load_environment() -> Environment {
     let db_url = env::var("DATABASE_URL").unwrap();
     let api_token = env::var("API_TOKEN").unwrap();
