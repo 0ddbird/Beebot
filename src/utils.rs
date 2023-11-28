@@ -11,7 +11,9 @@ pub struct Environment {
     pub(crate) slack_channel: String,
     pub(crate) mail_token: String,
     pub(crate) mail_sender: String,
-    pub(crate) mail_recipient: String,
+    pub(crate) mail_recipient_1: String,
+    pub(crate) mail_recipient_2: String,
+    pub(crate) mail_recipient_3: String,
     pub(crate) urls: Vec<(&'static str, String)>,
 }
 
@@ -22,7 +24,9 @@ pub fn load_environment() -> Environment {
     let slack_channel = env::var("SLACK_CHANNEL").unwrap();
     let mail_token = env::var("SENDGRID_API_TOKEN").unwrap();
     let mail_sender = env::var("SENDGRID_SENDER").unwrap();
-    let mail_recipient = env::var("SENDGRID_RECIPIENT").unwrap();
+    let mail_recipient_1 = env::var("SENDGRID_RECIPIENT_1").unwrap();
+    let mail_recipient_2 = env::var("SENDGRID_RECIPIENT_2").unwrap();
+    let mail_recipient_3 = env::var("SENDGRID_RECIPIENT_3").unwrap();
 
     let urls = vec![
         ("payments", env::var("URL_PAYMENTS").unwrap()),
@@ -41,7 +45,9 @@ pub fn load_environment() -> Environment {
         slack_channel,
         mail_token,
         mail_sender,
-        mail_recipient,
+        mail_recipient_1,
+        mail_recipient_2,
+        mail_recipient_3,
         urls,
     };
 

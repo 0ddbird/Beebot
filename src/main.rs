@@ -84,10 +84,16 @@ async fn main() {
 
     if needs_alert {
         info!("Sending alert email\nMail content:\n{}", mail_body);
+
+        let recipients = vec![
+            &env.mail_recipient_1,
+            &env.mail_recipient_2,
+            &env.mail_recipient_3,
+        ];
         match send_mail(
             &env.mail_token,
             &env.mail_sender,
-            &env.mail_recipient,
+            recipients,
             &mail_body,
             is_test_mode,
         )

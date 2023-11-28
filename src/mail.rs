@@ -32,8 +32,8 @@ pub fn compose_mail_body(
 
 pub async fn send_mail(
     token: &str,
-    from: &str,
-    to: &str,
+    sender: &str,
+    recipients: Vec<&String>,
     body: &str,
     is_test_mode: bool,
 ) -> Result<(), reqwest::Error> {
@@ -44,17 +44,22 @@ pub async fn send_mail(
     }
     .to_string();
     let subject = format!("🚨 {} EMERGENCY | Issue with app", test_subject);
-
     let client = reqwest::Client::new();
+
+    let mut json_recipients = Vec::new();
+    for recipient in recipients {
+        json_recipients.push(json!({"email": recipient}));
+    }
+
     let res = client
         .post("https://api.sendgrid.com/v3/mail/send")
         .bearer_auth(token)
         .json(&json!({
             "personalizations": [{
-                "to": [{"email": to}],
+                "to": json_recipients,
                 "subject": subject
             }],
-            "from": {"email": from},
+            "from": {"email": sender},
             "content": [{
                 "type": "text/plain",
                 "value": body
