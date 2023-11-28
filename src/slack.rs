@@ -57,7 +57,7 @@ pub fn create_message(
             Status::Alert => ":square_x:",
         };
 
-        let link = format!(" <{}|:hyperlink:>\n", url);
+        let link = format!(" <{}| View >\n", url);
 
         message.push_str(&format!(
             "{}{} {}: {} {}",
