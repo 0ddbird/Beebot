@@ -18,6 +18,12 @@ pub struct VoucherStatuses {
     pub(crate) other: usize,
 }
 
+#[derive(Default, Copy, Clone)]
+pub struct PaymentTypes {
+    pub(crate) individual: usize,
+    pub(crate) group: usize,
+}
+
 pub struct PageResults {
     pub(crate) validated_payments_count: Option<usize>,
     pub(crate) paid_vouchers_count: Option<VoucherStatuses>,
@@ -92,6 +98,26 @@ fn count_validated_payments(html: &str) -> usize {
         .select(&selector)
         .filter(|element| element.inner_html().trim() == "Validated")
         .count()
+}
+
+fn _count_payment_types(html: &str) -> PaymentTypes {
+    let document = Html::parse_document(html);
+    let selector = Selector::parse("td.field-payment_splitting").unwrap();
+
+    let mut payment_types = PaymentTypes {
+        individual: 0,
+        group: 0,
+    };
+
+    for element in document.select(&selector) {
+        match element.inner_html().trim() {
+            "Individual" => payment_types.individual += 1,
+            "Group" => payment_types.group += 1,
+            _ => {}
+        }
+    }
+
+    payment_types
 }
 
 fn has_correct_content(html: &str) -> bool {
