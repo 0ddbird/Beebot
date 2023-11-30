@@ -12,6 +12,15 @@ pub struct EmailStatuses {
 }
 
 #[derive(Default, Copy, Clone)]
+pub struct PaymentStatuses {
+    pub(crate) validated: usize,
+    pub(crate) to_validate: usize,
+    pub(crate) threed_secure: usize,
+    pub(crate) cancelled: usize,
+    pub(crate) error: usize,
+}
+
+#[derive(Default, Copy, Clone)]
 pub struct VoucherStatuses {
     pub(crate) paid: usize,
     pub(crate) error: usize,
@@ -24,12 +33,15 @@ pub struct PaymentTypes {
     pub(crate) group: usize,
 }
 
+#[derive(Default)]
 pub struct PageResults {
-    pub(crate) validated_payments_count: Option<usize>,
-    pub(crate) paid_vouchers_count: Option<VoucherStatuses>,
-    pub(crate) pdf_count: Option<usize>,
-    pub(crate) email_check_count: Option<EmailStatuses>,
-    pub(crate) is_purchase_website_ok: Option<bool>,
+    pub(crate) validated_payments_count: PaymentStatuses,
+    pub(crate) payment_types_count: PaymentTypes,
+    pub(crate) paid_vouchers_count: VoucherStatuses,
+    pub(crate) not_imported_count: usize,
+    pub(crate) pdf_count: usize,
+    pub(crate) email_check_count: EmailStatuses,
+    pub(crate) is_purchase_website_ok: bool,
     pub(crate) url_validated_payments: String,
     pub(crate) url_vouchers_count: String,
     pub(crate) url_pdf_count: String,
@@ -41,11 +53,7 @@ fn count_vouchers_statuses(html: &str) -> VoucherStatuses {
     let document = Html::parse_document(html);
     let selector = Selector::parse("td.field-state").unwrap();
 
-    let mut voucher_status = VoucherStatuses {
-        paid: 0,
-        error: 0,
-        other: 0,
-    };
+    let mut voucher_status = VoucherStatuses::default();
 
     for element in document.select(&selector) {
         match element.inner_html().trim() {
@@ -72,11 +80,7 @@ fn count_email_statuses(html: &str) -> EmailStatuses {
     let document = Html::parse_document(html);
     let selector = Selector::parse("td.field-_has_been_sent").unwrap();
 
-    let mut email_status = EmailStatuses {
-        sent: 0,
-        not_sent: 0,
-        bulk: 0,
-    };
+    let mut email_status = EmailStatuses::default();
 
     for element in document.select(&selector) {
         match element.inner_html().trim() {
@@ -90,24 +94,41 @@ fn count_email_statuses(html: &str) -> EmailStatuses {
     email_status
 }
 
-fn count_validated_payments(html: &str) -> usize {
+fn count_not_imported(html: &str) -> usize {
     let document = Html::parse_document(html);
-    let selector = Selector::parse("td.field-state").unwrap();
+    let selector = Selector::parse("td.field-imported_from").unwrap();
 
     document
         .select(&selector)
-        .filter(|element| element.inner_html().trim() == "Validated")
+        .filter(|element| element.inner_html().trim() == "-")
         .count()
 }
 
-fn _count_payment_types(html: &str) -> PaymentTypes {
+fn count_payment_statuses(html: &str) -> PaymentStatuses {
+    let document = Html::parse_document(html);
+    let selector = Selector::parse("td.field-state").unwrap();
+
+    let mut payment_statuses = PaymentStatuses::default();
+
+    for element in document.select(&selector) {
+        match element.inner_html().trim() {
+            "Validated" => payment_statuses.validated += 1,
+            "To validate" => payment_statuses.to_validate += 1,
+            "3d secure" => payment_statuses.threed_secure += 1,
+            "Cancelled" => payment_statuses.cancelled += 1,
+            "Error" => payment_statuses.error += 1,
+            _ => {}
+        }
+    }
+
+    payment_statuses
+}
+
+fn count_payment_types(html: &str) -> PaymentTypes {
     let document = Html::parse_document(html);
     let selector = Selector::parse("td.field-payment_splitting").unwrap();
 
-    let mut payment_types = PaymentTypes {
-        individual: 0,
-        group: 0,
-    };
+    let mut payment_types = PaymentTypes::default();
 
     for element in document.select(&selector) {
         match element.inner_html().trim() {
@@ -130,34 +151,34 @@ fn has_correct_content(html: &str) -> bool {
 }
 
 pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool) -> PageResults {
-    let mut results = PageResults {
-        validated_payments_count: None,
-        pdf_count: None,
-        email_check_count: None,
-        paid_vouchers_count: None,
-        is_purchase_website_ok: None,
-        url_validated_payments: "".to_string(),
-        url_vouchers_count: "".to_string(),
-        url_pdf_count: "".to_string(),
-        url_email_check_count: "".to_string(),
-        url_purchase_website: "".to_string(),
-    };
+    let mut results = PageResults::default();
 
     if is_test_mode {
         results = PageResults {
-            validated_payments_count: Some(85),
-            paid_vouchers_count: Some(VoucherStatuses {
+            validated_payments_count: PaymentStatuses {
+                validated: 100,
+                to_validate: 0,
+                threed_secure: 0,
+                cancelled: 0,
+                error: 0,
+            },
+            payment_types_count: PaymentTypes {
+                individual: 80,
+                group: 20,
+            },
+            paid_vouchers_count: VoucherStatuses {
                 paid: 40,
                 error: 10,
                 other: 50,
-            }),
-            pdf_count: Some(76),
-            email_check_count: Some(EmailStatuses {
+            },
+            not_imported_count: 50,
+            pdf_count: 76,
+            email_check_count: EmailStatuses {
                 sent: 30,
                 not_sent: 50,
                 bulk: 20,
-            }),
-            is_purchase_website_ok: Some(false),
+            },
+            is_purchase_website_ok: false,
             url_validated_payments: "https://test-domain.com".to_string(),
             url_vouchers_count: "https://test-domain.com".to_string(),
             url_pdf_count: "https://test-domain.com".to_string(),
@@ -167,28 +188,28 @@ pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool
     }
 
     if let Some(page) = html_contents.get("payments") {
-        results.validated_payments_count = Some(count_validated_payments(&page.html));
+        results.validated_payments_count = count_payment_statuses(&page.html);
+        results.payment_types_count = count_payment_types(&page.html);
         results.url_validated_payments = page.url.clone();
     }
 
     if let Some(page) = html_contents.get("paid_vouchers") {
-        results.pdf_count = Some(count_pdf(&page.html));
-        results.email_check_count = Some(count_email_statuses(&page.html));
+        results.pdf_count = count_pdf(&page.html);
+        results.email_check_count = count_email_statuses(&page.html);
+        results.not_imported_count = count_not_imported(&page.html);
         let url = page.url.clone();
         results.url_pdf_count = url.clone();
         results.url_email_check_count = url;
     }
 
     if let Some(page) = html_contents.get("vouchers") {
-        results.paid_vouchers_count = Some(count_vouchers_statuses(&page.html));
+        results.paid_vouchers_count = count_vouchers_statuses(&page.html);
         results.url_vouchers_count = page.url.clone();
     }
 
     if let Some(page) = html_contents.get("purchase_website") {
         results.url_purchase_website = page.url.clone();
-        results.is_purchase_website_ok = Some(has_correct_content(&page.html));
-    } else {
-        results.is_purchase_website_ok = Some(false);
+        results.is_purchase_website_ok = has_correct_content(&page.html);
     }
 
     results

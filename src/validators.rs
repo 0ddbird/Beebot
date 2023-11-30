@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter, Result};
 use chrono::prelude::*;
 use chrono_tz::Europe::Paris;
 
-use crate::parser::PageResults;
 use crate::parser::{EmailStatuses, VoucherStatuses};
+use crate::parser::{PageResults, PaymentStatuses};
 
 #[derive(PartialEq)]
 pub enum Status {
@@ -47,15 +47,29 @@ fn get_threshold(threshold_day: usize, threshold_night: usize) -> usize {
 pub fn validate(pages: &PageResults) -> Vec<(UnitValidationResult, String)> {
     let threshold = get_threshold(75, 50);
 
-    let payments_result = validate_count(
+    let payments_result = validate_payment_status(
         "Validated payments",
         threshold,
         pages.validated_payments_count,
     );
-    let paid_vouchers_result =
-        validate_voucher_status("Paid vouchers", threshold, pages.paid_vouchers_count);
-    let pdf_count_result = validate_count("PDF count", threshold, pages.pdf_count);
-    let emails_result = validate_email_status("Email count", threshold, pages.email_check_count);
+    let paid_vouchers_result = validate_voucher_status(
+        "Paid vouchers",
+        threshold,
+        pages.paid_vouchers_count,
+        pages.not_imported_count,
+    );
+    let pdf_count_result = validate_pdf_count(
+        "PDF count",
+        threshold,
+        pages.pdf_count,
+        pages.not_imported_count,
+    );
+    let emails_result = validate_email_status(
+        "Email count",
+        threshold,
+        pages.email_check_count,
+        pages.not_imported_count,
+    );
     let purchase_website_result =
         validate_purchase_website_status("Purchase website", pages.is_purchase_website_ok);
 
@@ -68,7 +82,12 @@ pub fn validate(pages: &PageResults) -> Vec<(UnitValidationResult, String)> {
     ]
 }
 
-fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitValidationResult {
+fn validate_pdf_count(
+    name: &str,
+    threshold: usize,
+    pdf_count: usize,
+    max_possible_count: usize,
+) -> UnitValidationResult {
     let mut result = UnitValidationResult {
         name: name.to_string(),
         status: Status::Alert,
@@ -76,28 +95,55 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
         value: Value::Count(0),
     };
 
-    match count {
-        None => {
-            result.message = "NOT AVAILABLE".to_string();
-        }
-        Some(c) => {
-            result.value = Value::Count(c);
+    // Arbitrary value to not scare the team with a warning icon
+    let fixed_threshold_for_ok = 85 * max_possible_count / 100;
 
-            if c == 100 {
-                result.status = Status::Ok;
-                result.message = format!("`{}`", c);
-            } else if c >= 85 && ["Validated payments", "Paid vouchers"].contains(&name) {
-                result.status = Status::Ok;
-                result.message = format!("`{} (>{})`", c, threshold);
-            } else if c > threshold {
-                result.status = Status::Warning;
-                result.message = format!("`{} (>{})`", c, threshold);
-            } else {
-                result.status = Status::Alert;
-                result.message = format!("`{} (<{})`", c, threshold);
-            }
-        }
+    // The threshold must depend on the maximum possible value
+    let relative_threshold_for_warning = threshold * max_possible_count / 100;
+
+    if pdf_count >= fixed_threshold_for_ok {
+        result.status = Status::Ok;
+    } else if pdf_count >= relative_threshold_for_warning {
+        result.status = Status::Warning;
+    } else {
+        result.status = Status::Alert;
     }
+    result.value = Value::Count(pdf_count);
+    result.message = format!("`{}/{}`", pdf_count, max_possible_count);
+
+    result
+}
+
+fn validate_payment_status(
+    name: &str,
+    threshold: usize,
+    statuses: PaymentStatuses,
+) -> UnitValidationResult {
+    let mut result = UnitValidationResult {
+        name: name.to_string(),
+        status: Status::Alert,
+        message: "".to_string(),
+        value: Value::Count(0),
+    };
+
+    let validated_count = statuses.validated;
+
+    if validated_count >= 85 {
+        result.status = Status::Ok;
+    } else if validated_count > threshold {
+        result.status = Status::Warning;
+    } else {
+        result.status = Status::Alert;
+    }
+    result.message = format!(
+        "`{} VALIDATED` `{} TO VALIDATE` `{} ERROR` `{} 3D SECURE` `{} CANCELLED`",
+        statuses.validated,
+        statuses.to_validate,
+        statuses.error,
+        statuses.threed_secure,
+        statuses.cancelled
+    );
+    result.value = Value::Count(validated_count);
 
     result
 }
@@ -105,7 +151,8 @@ fn validate_count(name: &str, threshold: usize, count: Option<usize>) -> UnitVal
 fn validate_voucher_status(
     name: &str,
     threshold: usize,
-    vouchers: Option<VoucherStatuses>,
+    vouchers: VoucherStatuses,
+    max_possible_value: usize,
 ) -> UnitValidationResult {
     let mut result = UnitValidationResult {
         name: name.to_string(),
@@ -114,29 +161,27 @@ fn validate_voucher_status(
         value: Value::Count(0),
     };
 
-    if let Some(voucher) = vouchers {
-        let total_vouchers = voucher.paid + voucher.error;
-        let paid_percentage = if total_vouchers > 0 {
-            (voucher.paid as f64 / total_vouchers as f64) * 100.0
-        } else {
-            0.0
-        };
+    let total_vouchers = max_possible_value;
+    let paid_percentage = if total_vouchers > 0 {
+        (vouchers.paid as f64 / total_vouchers as f64) * 100.0
+    } else {
+        0.0
+    };
 
-        result.status = if paid_percentage == 100.0 {
-            Status::Ok
-        } else if paid_percentage > threshold as f64 {
-            Status::Warning
-        } else {
-            Status::Alert
-        };
+    result.status = if paid_percentage == 100.0 {
+        Status::Ok
+    } else if paid_percentage > threshold as f64 {
+        Status::Warning
+    } else {
+        Status::Alert
+    };
 
-        result.value = Value::Count(voucher.paid);
+    result.value = Value::Count(vouchers.paid);
 
-        result.message = format!(
-            "`{} PAID`, `{} ERROR`, `{} OTHER`",
-            voucher.paid, voucher.error, voucher.other
-        );
-    }
+    result.message = format!(
+        "`{}/{} PAID`, `{} ERROR`, `{} OTHER`",
+        vouchers.paid, max_possible_value, vouchers.error, vouchers.other
+    );
 
     result
 }
@@ -144,7 +189,8 @@ fn validate_voucher_status(
 fn validate_email_status(
     name: &str,
     threshold: usize,
-    statuses: Option<EmailStatuses>,
+    statuses: EmailStatuses,
+    max_possible_value: usize,
 ) -> UnitValidationResult {
     let mut result = UnitValidationResult {
         name: name.to_string(),
@@ -153,34 +199,32 @@ fn validate_email_status(
         value: Value::Count(0),
     };
 
-    if let Some(statuses) = statuses {
-        let total_emails = statuses.sent + statuses.not_sent;
-        let sent_percentage = if total_emails > 0 {
-            (statuses.sent as f64 / total_emails as f64) * 100.0
-        } else {
-            0.0
-        };
+    let total_emails = max_possible_value;
+    let sent_percentage = if total_emails > 0 {
+        (statuses.sent as f64 / total_emails as f64) * 100.0
+    } else {
+        0.0
+    };
 
-        result.status = if sent_percentage == 100.0 {
-            Status::Ok
-        } else if sent_percentage > threshold as f64 {
-            Status::Warning
-        } else {
-            Status::Alert
-        };
+    result.status = if sent_percentage == 100.0 {
+        Status::Ok
+    } else if sent_percentage > threshold as f64 {
+        Status::Warning
+    } else {
+        Status::Alert
+    };
 
-        result.value = Value::Count(statuses.sent);
+    result.value = Value::Count(statuses.sent);
 
-        result.message = format!(
-            "`{} SENT`, `{} NOT SENT`, `{} BULK`",
-            statuses.sent, statuses.not_sent, statuses.bulk
-        );
-    }
+    result.message = format!(
+        "`{}/{} SENT`, `{} NOT SENT`, `{} BULK`",
+        statuses.sent, max_possible_value, statuses.not_sent, statuses.bulk
+    );
 
     result
 }
 
-fn validate_purchase_website_status(name: &str, is_ok: Option<bool>) -> UnitValidationResult {
+fn validate_purchase_website_status(name: &str, is_ok: bool) -> UnitValidationResult {
     let mut result = UnitValidationResult {
         name: name.to_string(),
         status: Status::Alert,
@@ -189,12 +233,12 @@ fn validate_purchase_website_status(name: &str, is_ok: Option<bool>) -> UnitVali
     };
 
     match is_ok {
-        Some(true) => {
+        true => {
             result.message = "`ONLINE`".to_string();
             result.status = Status::Ok;
             result.value = Value::Bool(true);
         }
-        None | Some(false) => {
+        false => {
             result.message = "`DOWN`".to_string();
             result.status = Status::Alert;
         }
