@@ -18,6 +18,7 @@ simplelog = "0.12.1"
 log = "0.4.20"
 diesel = { version = "2.1.4", features = ["sqlite"] }
 clap = { version = "4.4.8", features = ["derive"] }
+base64 = "0.21.5"
 
 [dev-dependencies]
 diesel_cli = { version = "2.1.1", features = ["sqlite"] }

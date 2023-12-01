@@ -9,13 +9,21 @@ pub struct Page {
     pub(crate) html: String,
 }
 
-async fn fetch_html(url: &str, api_token: &str) -> Result<(String, String), reqwest::Error> {
+async fn fetch_html(
+    url: &str,
+    api_token: &str,
+    celery_username: &str,
+    celery_password: &str,
+) -> Result<(String, String), reqwest::Error> {
     let client = reqwest::Client::new();
-    let res = client
-        .get(url)
-        .header("Authorization", api_token)
-        .send()
-        .await?;
+    let res = client.get(url).send().await?;
+
+    if Some(api_token) {
+        res.header("Authorization", api_token)
+    } else if Some(celery_username) && Some(celery_password) {
+        let credentials = base64::encode(format!("{:?}:{:?}", celery_username, celery_password));
+        res.header("Authorization", format!("Basic {}", credentials))
+    }
 
     if res.status().is_success() {
         Ok((url.to_string(), res.text().await?))
@@ -27,6 +35,8 @@ async fn fetch_html(url: &str, api_token: &str) -> Result<(String, String), reqw
 pub async fn request_pages(
     api_token: &str,
     urls: &Vec<(&str, String)>,
+    celery_username: &str,
+    celery_password: &str,
     is_test_mode: bool,
 ) -> HashMap<String, Page> {
     if is_test_mode {
@@ -38,7 +48,16 @@ pub async fn request_pages(
         .map(|(key, url)| {
             let token = api_token.to_string();
             let url_clone = url.clone();
-            async move { (key.to_string(), fetch_html(&url_clone, &token).await) }
+            if url[0] == "celery" {
+                async move {
+                    (
+                        key.to_string(),
+                        fetch_html(&url_clone, celery_username, celery_password).await,
+                    )
+                }
+            } else {
+                async move { (key.to_string(), fetch_html(&url_clone, &token).await) }
+            }
         })
         .collect::<Vec<_>>();
 

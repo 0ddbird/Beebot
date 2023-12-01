@@ -33,6 +33,13 @@ pub struct PaymentTypes {
     pub(crate) group: usize,
 }
 
+#[derive(Default, Copy, Clone)]
+pub struct CeleryStatuses {
+    pub(crate) main: bool,
+    pub(crate) ph: bool,
+    pub(crate) bi: bool,
+}
+
 #[derive(Default)]
 pub struct PageResults {
     pub(crate) validated_payments_count: PaymentStatuses,
@@ -47,6 +54,8 @@ pub struct PageResults {
     pub(crate) url_pdf_count: String,
     pub(crate) url_email_check_count: String,
     pub(crate) url_purchase_website: String,
+    pub(crate) url_celery: String,
+    pub(crate) celery_statuses: CeleryStatuses,
 }
 
 fn count_vouchers_statuses(html: &str) -> VoucherStatuses {
@@ -150,6 +159,29 @@ fn has_correct_content(html: &str) -> bool {
         .any(|element| element.inner_html().trim() == "Nos bons cadeaux - Le Quatrième Mur")
 }
 
+fn get_celery_statuses(html: &str) -> CeleryStatuses {
+    let document = Html::parse_document(html);
+    let selector = Selector::parse("td.sorting_1").unwrap();
+
+    let mut statuses = CeleryStatuses::default();
+    let mut count = 0;
+
+    let expected_content = "<span class=\"label label-success\">Online</span>";
+
+    for element in document.select(&selector) {
+        if count == 0 {
+            statuses.bi = element.inner_html().contains(expected_content);
+        } else if count == 1 {
+            statuses.main = element.inner_html().contains(expected_content);
+        } else if count == 2 {
+            statuses.ph = element.inner_html().contains(expected_content);
+        }
+        count += 1;
+    }
+
+    statuses
+}
+
 pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool) -> PageResults {
     let mut results = PageResults::default();
 
@@ -184,6 +216,12 @@ pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool
             url_pdf_count: "https://test-domain.com".to_string(),
             url_email_check_count: "https://test-domain.com".to_string(),
             url_purchase_website: "https://test-domain.com".to_string(),
+            url_celery: "https://test-domain.com".to_string(),
+            celery_statuses: CeleryStatuses {
+                main: true,
+                ph: true,
+                bi: true,
+            },
         }
     }
 
@@ -210,6 +248,11 @@ pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool
     if let Some(page) = html_contents.get("purchase_website") {
         results.url_purchase_website = page.url.clone();
         results.is_purchase_website_ok = has_correct_content(&page.html);
+    }
+
+    if let Some(page) = html_contents.get("celery") {
+        results.url_celery = page.url.clone();
+        results.celery_statuses = get_celery_statuses(&page.html);
     }
 
     results

@@ -14,6 +14,8 @@ pub struct Environment {
     pub(crate) mail_recipient_1: String,
     pub(crate) mail_recipient_2: String,
     pub(crate) mail_recipient_3: String,
+    pub(crate) celery_username: String,
+    pub(crate) celery_password: String,
     pub(crate) urls: Vec<(&'static str, String)>,
 }
 
@@ -27,6 +29,8 @@ pub fn load_environment() -> Environment {
     let mail_recipient_1 = env::var("SENDGRID_RECIPIENT_1").unwrap();
     let mail_recipient_2 = env::var("SENDGRID_RECIPIENT_2").unwrap();
     let mail_recipient_3 = env::var("SENDGRID_RECIPIENT_3").unwrap();
+    let celery_username = env::var("CELERY_USERNAME").unwrap();
+    let celery_password = env::var("CELERY_PASSWORD").unwrap();
 
     let urls = vec![
         ("payments", env::var("URL_PAYMENTS").unwrap()),
@@ -36,6 +40,7 @@ pub fn load_environment() -> Environment {
             "purchase_website",
             env::var("URL_PURCHASE_WEBSITE").unwrap(),
         ),
+        ("celery", env::var("URL_CELERY").unwrap()),
     ];
 
     let environment = Environment {
@@ -48,6 +53,8 @@ pub fn load_environment() -> Environment {
         mail_recipient_1,
         mail_recipient_2,
         mail_recipient_3,
+        celery_username,
+        celery_password,
         urls,
     };
 

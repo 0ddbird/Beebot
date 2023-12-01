@@ -50,7 +50,14 @@ async fn main() {
 
     // Fetch + Parse
     info!("Fetching pages content");
-    let pages = requests::request_pages(&env.api_token, &env.urls, is_test_mode).await;
+    let pages = requests::request_pages(
+        &env.api_token,
+        &env.urls,
+        &env.celery_username,
+        &env.celery_password,
+        is_test_mode,
+    )
+    .await;
     let metrics = parser::extract_metrics(&pages, is_test_mode);
 
     // Metrics validation
