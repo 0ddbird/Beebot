@@ -1,17 +1,43 @@
 use reqwest;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::db::LogEntry;
-use crate::validators::{Status, UnitValidationResult, Value};
+use crate::validators::{Status, UnitValidationResult, ValidationValue};
 
-fn get_corresponding_value(name: &str, log_entry: &LogEntry) -> Value {
+fn get_corresponding_value(name: &str, log_entry: &LogEntry) -> ValidationValue {
     match name {
-        "Validated payments" => Value::Count(log_entry.payments as usize),
-        "Paid vouchers" => Value::Count(log_entry.vouchers as usize),
-        "PDF count" => Value::Count(log_entry.pdf_count as usize),
-        "Email count" => Value::Count(log_entry.email_count as usize),
-        "Purchase website" => Value::Bool(log_entry.website_ok),
-        _ => Value::Count(0),
+        "Validated payments" => ValidationValue::Count(log_entry.payments as usize),
+        "Paid vouchers" => ValidationValue::Count(log_entry.vouchers as usize),
+        "PDF count" => ValidationValue::Count(log_entry.pdf_count as usize),
+        "Email count" => ValidationValue::Count(log_entry.email_count as usize),
+        "Purchase website" => ValidationValue::Bool(log_entry.website_ok),
+        _ => ValidationValue::Count(0),
+    }
+}
+
+fn get_trend_icon(
+    last_log_value: Option<&ValidationValue>,
+    current_value: &ValidationValue,
+) -> String {
+    match (last_log_value, current_value) {
+        (Some(ValidationValue::Count(last_count)), ValidationValue::Count(current_count)) => {
+            if current_count > last_count {
+                ":trend_up:".to_string()
+            } else if current_count < last_count {
+                ":trend_down:".to_string()
+            } else {
+                ":blank:".to_string()
+            }
+        }
+        _ => ":blank:".to_string(),
+    }
+}
+
+fn get_status_icon(status: &Status) -> &'static str {
+    match status {
+        Status::Ok => ":square_check:",
+        Status::Warning => ":square_neutral:",
+        Status::Alert => ":square_x:",
     }
 }
 
@@ -19,69 +45,77 @@ pub fn create_message(
     validation_results: &Vec<(UnitValidationResult, String)>,
     last_log: Option<LogEntry>,
     is_test_mode: bool,
-) -> String {
-    let mut should_alert_channel = false;
-    let mut message = "".to_string();
+) -> Value {
+    let mut blocks = Vec::new();
 
     if is_test_mode {
-        message.push_str("*THIS IS A TEST*\n");
+        blocks.push(json!({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*THIS IS A TEST*"
+            }
+        }));
     }
 
     for (result, url) in validation_results {
-        if result.status == Status::Alert {
-            should_alert_channel = true;
+        let last_log_value = last_log
+            .as_ref()
+            .map(|entry| get_corresponding_value(&result.name, entry));
+        let trend_icon = get_trend_icon(last_log_value.as_ref(), &result.value);
+        let status_symbol = get_status_icon(&result.status);
+
+        let header_text = format!("*{} {}*", result.name, trend_icon);
+
+        let detail_text = format!("{} {}", status_symbol, result.message);
+
+        blocks.push(json!({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": header_text
+            },
+        }));
+
+        blocks.push(json!({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": detail_text
+            },
+            "accessory": {
+                "type": "button",
+                "text": {
+                    "type": "plain_text",
+                    "text": "View",
+                    "emoji": true
+                },
+                "value": "view",
+                "url": url
+            }
+        }));
+        blocks.push(json!({
+            "type": "divider"
         }
-
-        let mut trend_icon = String::new();
-
-        if let Some(ref entry) = last_log {
-            let last_log_value = get_corresponding_value(&result.name, entry);
-
-            trend_icon = match (last_log_value, &result.value) {
-                (Value::Count(last_count), Value::Count(current_count)) => {
-                    if current_count > &last_count {
-                        ":trend_up:".to_string()
-                    } else if current_count < &last_count {
-                        ":trend_down:".to_string()
-                    } else {
-                        ":blank:".to_string()
-                    }
-                }
-                _ => ":blank:".to_string(),
-            };
-        }
-
-        let status_symbol = match result.status {
-            Status::Ok => ":square_check:",
-            Status::Warning => ":square_neutral:",
-            Status::Alert => ":square_x:",
-        };
-
-        let link = format!(" <{}| View >\n", url);
-
-        message.push_str(&format!(
-            "{}{} {}: {} {}",
-            status_symbol, trend_icon, result.name, result.message, link
         ));
     }
 
-    if should_alert_channel {
-        message.push_str(&format!("<!channel>"));
-    }
-
-    message
+    json!({ "blocks": blocks })
 }
 
-pub async fn post_message(token: &str, channel: &str, message: &str) -> Result<(), reqwest::Error> {
+pub async fn post_message(
+    token: &str,
+    channel: &str,
+    blocks: &Value,
+) -> Result<(), reqwest::Error> {
     let client = reqwest::Client::new();
+    let mut payload = blocks.as_object().unwrap().clone();
+    payload.insert("channel".to_string(), json!(channel));
+    payload.insert("unfurl_links".to_string(), json!(false));
     let res = client
         .post("https://slack.com/api/chat.postMessage")
         .bearer_auth(token)
-        .json(&json!({
-            "channel": channel,
-            "text": message,
-            "unfurl_links": false,
-        }))
+        .json(&payload)
         .send()
         .await?;
 

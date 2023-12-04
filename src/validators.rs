@@ -13,16 +13,16 @@ pub enum Status {
     Alert,
 }
 
-pub enum Value {
+pub enum ValidationValue {
     Count(usize),
     Bool(bool),
 }
 
-impl Display for Value {
+impl Display for ValidationValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Value::Count(count) => write!(f, "{}", count),
-            Value::Bool(b) => write!(f, "{}", b),
+            ValidationValue::Count(count) => write!(f, "{}", count),
+            ValidationValue::Bool(b) => write!(f, "{}", b),
         }
     }
 }
@@ -31,7 +31,7 @@ pub struct UnitValidationResult {
     pub(crate) name: String,
     pub(crate) status: Status,
     pub(crate) message: String,
-    pub(crate) value: Value,
+    pub(crate) value: ValidationValue,
 }
 
 fn get_threshold(threshold_day: usize, threshold_night: usize) -> usize {
@@ -95,7 +95,7 @@ fn validate_pdf_count(
         name: name.to_string(),
         status: Status::Alert,
         message: "".to_string(),
-        value: Value::Count(0),
+        value: ValidationValue::Count(0),
     };
 
     // Arbitrary value to not scare the team with a warning icon
@@ -111,7 +111,7 @@ fn validate_pdf_count(
     } else {
         result.status = Status::Alert;
     }
-    result.value = Value::Count(pdf_count);
+    result.value = ValidationValue::Count(pdf_count);
     result.message = format!("`{}/{}`", pdf_count, max_possible_count);
 
     result
@@ -126,7 +126,7 @@ fn validate_payment_status(
         name: name.to_string(),
         status: Status::Alert,
         message: "".to_string(),
-        value: Value::Count(0),
+        value: ValidationValue::Count(0),
     };
 
     let validated_count = statuses.validated;
@@ -140,7 +140,7 @@ fn validate_payment_status(
         result.status = Status::Alert;
     }
     result.message = format!(
-        "`{}/{} VALIDATED` `{} TO VALIDATE` `{} ERROR` `{} 3D SECURE` `{} CANCELLED` `{} GROUP`",
+        "`{}/{} VALIDATED`, `{} TO VALIDATE`, `{} ERROR`, `{} 3D SECURE`, `{} CANCELLED`, `{} GROUP`",
         statuses.validated,
         minimum_paid_expected,
         statuses.to_validate,
@@ -149,7 +149,7 @@ fn validate_payment_status(
         statuses.cancelled,
         statuses.group
     );
-    result.value = Value::Count(validated_count);
+    result.value = ValidationValue::Count(validated_count);
 
     result
 }
@@ -164,7 +164,7 @@ fn validate_voucher_status(
         name: name.to_string(),
         status: Status::Alert,
         message: "".to_string(),
-        value: Value::Count(0),
+        value: ValidationValue::Count(0),
     };
 
     let total_vouchers = max_possible_value;
@@ -182,7 +182,7 @@ fn validate_voucher_status(
         Status::Alert
     };
 
-    result.value = Value::Count(vouchers.paid);
+    result.value = ValidationValue::Count(vouchers.paid);
 
     result.message = format!(
         "`{}/{} PAID`, `{} ERROR`, `{} OTHER`",
@@ -202,7 +202,7 @@ fn validate_email_status(
         name: name.to_string(),
         status: Status::Alert,
         message: "".to_string(),
-        value: Value::Count(0),
+        value: ValidationValue::Count(0),
     };
 
     let total_emails = max_possible_value;
@@ -220,7 +220,7 @@ fn validate_email_status(
         Status::Alert
     };
 
-    result.value = Value::Count(statuses.sent);
+    result.value = ValidationValue::Count(statuses.sent);
 
     result.message = format!(
         "`{}/{} SENT`, `{} NOT SENT`, `{} BULK`",
@@ -234,20 +234,14 @@ fn validate_purchase_website_status(name: &str, is_ok: bool) -> UnitValidationRe
     let mut result = UnitValidationResult {
         name: name.to_string(),
         status: Status::Alert,
-        message: "passed".to_string(),
-        value: Value::Bool(false),
+        message: "OFFLINE".to_string(),
+        value: ValidationValue::Bool(false),
     };
 
-    match is_ok {
-        true => {
-            result.message = "`ONLINE`".to_string();
-            result.status = Status::Ok;
-            result.value = Value::Bool(true);
-        }
-        false => {
-            result.message = "`DOWN`".to_string();
-            result.status = Status::Alert;
-        }
+    if is_ok {
+        result.message = "`ONLINE`".to_string();
+        result.status = Status::Ok;
+        result.value = ValidationValue::Bool(true);
     }
 
     result
@@ -258,13 +252,13 @@ fn validate_celery_statuses(name: &str, is_online: bool) -> UnitValidationResult
         name: name.to_string(),
         status: Status::Alert,
         message: "Celery status: `OFFLINE`".to_string(),
-        value: Value::Bool(false),
+        value: ValidationValue::Bool(false),
     };
 
     if is_online {
         result.message = "`ONLINE`".to_string();
         result.status = Status::Ok;
-        result.value = Value::Bool(true)
+        result.value = ValidationValue::Bool(true)
     }
 
     result
