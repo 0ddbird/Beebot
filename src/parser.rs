@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use scraper::{Html, Selector};
 
@@ -18,6 +18,7 @@ pub struct PaymentStatuses {
     pub(crate) threed_secure: usize,
     pub(crate) cancelled: usize,
     pub(crate) error: usize,
+    pub(crate) group: usize,
 }
 
 #[derive(Default, Copy, Clone)]
@@ -33,13 +34,6 @@ pub struct PaymentTypes {
     pub(crate) group: usize,
 }
 
-#[derive(Default, Copy, Clone)]
-pub struct CeleryStatuses {
-    pub(crate) main: bool,
-    pub(crate) ph: bool,
-    pub(crate) bi: bool,
-}
-
 #[derive(Default)]
 pub struct PageResults {
     pub(crate) validated_payments_count: PaymentStatuses,
@@ -48,14 +42,14 @@ pub struct PageResults {
     pub(crate) not_imported_count: usize,
     pub(crate) pdf_count: usize,
     pub(crate) email_check_count: EmailStatuses,
-    pub(crate) is_purchase_website_ok: bool,
+    pub(crate) is_website_online: bool,
     pub(crate) url_validated_payments: String,
     pub(crate) url_vouchers_count: String,
     pub(crate) url_pdf_count: String,
     pub(crate) url_email_check_count: String,
-    pub(crate) url_purchase_website: String,
+    pub(crate) url_website: String,
     pub(crate) url_celery: String,
-    pub(crate) celery_statuses: CeleryStatuses,
+    pub(crate) is_celery_online: bool,
 }
 
 fn count_vouchers_statuses(html: &str) -> VoucherStatuses {
@@ -115,12 +109,26 @@ fn count_not_imported(html: &str) -> usize {
 
 fn count_payment_statuses(html: &str) -> PaymentStatuses {
     let document = Html::parse_document(html);
-    let selector = Selector::parse("td.field-state").unwrap();
+    let row_selector = Selector::parse("table#result_list tbody tr").unwrap();
+    let state_selector = Selector::parse("td.field-state").unwrap();
+    let code_selector = Selector::parse("td.field-product_code_link").unwrap();
 
     let mut payment_statuses = PaymentStatuses::default();
+    let mut processed_codes = HashSet::new();
 
-    for element in document.select(&selector) {
-        match element.inner_html().trim() {
+    for row in document.select(&row_selector) {
+        let state_element = row.select(&state_selector).next().unwrap();
+        let code_element = row.select(&code_selector).next().unwrap();
+
+        let product_code = code_element.inner_html().trim().to_string();
+        if processed_codes.contains(&product_code) {
+            payment_statuses.group += 1;
+            continue;
+        }
+
+        processed_codes.insert(product_code.to_string());
+
+        match state_element.inner_html().trim() {
             "Validated" => payment_statuses.validated += 1,
             "To validate" => payment_statuses.to_validate += 1,
             "3d secure" => payment_statuses.threed_secure += 1,
@@ -159,27 +167,15 @@ fn has_correct_content(html: &str) -> bool {
         .any(|element| element.inner_html().trim() == "Nos bons cadeaux - Le Quatrième Mur")
 }
 
-fn get_celery_statuses(html: &str) -> CeleryStatuses {
+fn get_celery_status(html: &str) -> bool {
     let document = Html::parse_document(html);
-    let selector = Selector::parse("td.sorting_1").unwrap();
-
-    let mut statuses = CeleryStatuses::default();
-    let mut count = 0;
-
-    let expected_content = "<span class=\"label label-success\">Online</span>";
-
+    let selector = Selector::parse(r#"span.label.label-success"#).unwrap();
     for element in document.select(&selector) {
-        if count == 0 {
-            statuses.bi = element.inner_html().contains(expected_content);
-        } else if count == 1 {
-            statuses.main = element.inner_html().contains(expected_content);
-        } else if count == 2 {
-            statuses.ph = element.inner_html().contains(expected_content);
+        if !element.inner_html().contains("Online") {
+            return false;
         }
-        count += 1;
     }
-
-    statuses
+    true
 }
 
 pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool) -> PageResults {
@@ -193,6 +189,7 @@ pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool
                 threed_secure: 0,
                 cancelled: 0,
                 error: 0,
+                group: 0,
             },
             payment_types_count: PaymentTypes {
                 individual: 80,
@@ -210,18 +207,14 @@ pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool
                 not_sent: 50,
                 bulk: 20,
             },
-            is_purchase_website_ok: false,
+            is_website_online: false,
             url_validated_payments: "https://test-domain.com".to_string(),
             url_vouchers_count: "https://test-domain.com".to_string(),
             url_pdf_count: "https://test-domain.com".to_string(),
             url_email_check_count: "https://test-domain.com".to_string(),
-            url_purchase_website: "https://test-domain.com".to_string(),
+            url_website: "https://test-domain.com".to_string(),
             url_celery: "https://test-domain.com".to_string(),
-            celery_statuses: CeleryStatuses {
-                main: true,
-                ph: true,
-                bi: true,
-            },
+            is_celery_online: true,
         }
     }
 
@@ -246,13 +239,13 @@ pub fn extract_metrics(html_contents: &HashMap<String, Page>, is_test_mode: bool
     }
 
     if let Some(page) = html_contents.get("purchase_website") {
-        results.url_purchase_website = page.url.clone();
-        results.is_purchase_website_ok = has_correct_content(&page.html);
+        results.url_website = page.url.clone();
+        results.is_website_online = has_correct_content(&page.html);
     }
 
     if let Some(page) = html_contents.get("celery") {
         results.url_celery = page.url.clone();
-        results.celery_statuses = get_celery_statuses(&page.html);
+        results.is_celery_online = get_celery_status(&page.html);
     }
 
     results

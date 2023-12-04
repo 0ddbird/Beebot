@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use futures::future;
+use http_auth_basic::Credentials;
 use log::error;
 use reqwest;
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 
 pub struct Page {
     pub(crate) url: String,
@@ -10,20 +12,28 @@ pub struct Page {
 }
 
 async fn fetch_html(
+    key: &str,
     url: &str,
     api_token: &str,
     celery_username: &str,
     celery_password: &str,
 ) -> Result<(String, String), reqwest::Error> {
     let client = reqwest::Client::new();
-    let res = client.get(url).send().await?;
+    let mut headers = HeaderMap::new();
 
-    if Some(api_token) {
-        res.header("Authorization", api_token)
-    } else if Some(celery_username) && Some(celery_password) {
-        let credentials = base64::encode(format!("{:?}:{:?}", celery_username, celery_password));
-        res.header("Authorization", format!("Basic {}", credentials))
+    if key == "celery" {
+        headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
+        let credentials = Credentials::new(celery_username, celery_password);
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&credentials.as_http_header()).unwrap(),
+        );
+    } else {
+        let auth_value = HeaderValue::from_str(&format!("{}", api_token)).unwrap();
+        headers.insert(AUTHORIZATION, auth_value);
     }
+
+    let res = client.get(url).headers(headers).send().await?;
 
     if res.status().is_success() {
         Ok((url.to_string(), res.text().await?))
@@ -45,19 +55,11 @@ pub async fn request_pages(
 
     let futures = urls
         .iter()
-        .map(|(key, url)| {
-            let token = api_token.to_string();
-            let url_clone = url.clone();
-            if url[0] == "celery" {
-                async move {
-                    (
-                        key.to_string(),
-                        fetch_html(&url_clone, celery_username, celery_password).await,
-                    )
-                }
-            } else {
-                async move { (key.to_string(), fetch_html(&url_clone, &token).await) }
-            }
+        .map(|(key, url)| async move {
+            (
+                key.to_string(),
+                fetch_html(key, &url, &api_token, celery_username, celery_password).await,
+            )
         })
         .collect::<Vec<_>>();
 

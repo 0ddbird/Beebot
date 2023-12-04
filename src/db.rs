@@ -36,7 +36,7 @@ pub fn create_log(
         vouchers: page_results.paid_vouchers_count.paid as i32,
         pdf_count: page_results.pdf_count as i32,
         email_count: page_results.email_check_count.sent as i32,
-        website_ok: page_results.is_purchase_website_ok,
+        website_ok: page_results.is_website_online,
         slack_sent: is_slack_message_sent,
         email_sent: is_email_sent,
         datetime: None,

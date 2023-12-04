@@ -71,14 +71,17 @@ pub fn validate(pages: &PageResults) -> Vec<(UnitValidationResult, String)> {
         pages.not_imported_count,
     );
     let purchase_website_result =
-        validate_purchase_website_status("Purchase website", pages.is_purchase_website_ok);
+        validate_purchase_website_status("Purchase website", pages.is_website_online);
+
+    let celery_statuses = validate_celery_statuses("Celery", pages.is_celery_online);
 
     vec![
         (payments_result, pages.url_validated_payments.clone()),
         (paid_vouchers_result, pages.url_vouchers_count.clone()),
         (pdf_count_result, pages.url_pdf_count.clone()),
         (emails_result, pages.url_email_check_count.clone()),
-        (purchase_website_result, pages.url_purchase_website.clone()),
+        (purchase_website_result, pages.url_website.clone()),
+        (celery_statuses, pages.url_celery.clone()),
     ]
 }
 
@@ -127,21 +130,24 @@ fn validate_payment_status(
     };
 
     let validated_count = statuses.validated;
+    let minimum_paid_expected = 100 - statuses.group;
 
-    if validated_count >= 85 {
+    if validated_count >= 85 * minimum_paid_expected / 100 {
         result.status = Status::Ok;
-    } else if validated_count > threshold {
+    } else if validated_count > threshold * minimum_paid_expected / 100 {
         result.status = Status::Warning;
     } else {
         result.status = Status::Alert;
     }
     result.message = format!(
-        "`{} VALIDATED` `{} TO VALIDATE` `{} ERROR` `{} 3D SECURE` `{} CANCELLED`",
+        "`{}/{} VALIDATED` `{} TO VALIDATE` `{} ERROR` `{} 3D SECURE` `{} CANCELLED` `{} GROUP`",
         statuses.validated,
+        minimum_paid_expected,
         statuses.to_validate,
         statuses.error,
         statuses.threed_secure,
-        statuses.cancelled
+        statuses.cancelled,
+        statuses.group
     );
     result.value = Value::Count(validated_count);
 
@@ -242,6 +248,23 @@ fn validate_purchase_website_status(name: &str, is_ok: bool) -> UnitValidationRe
             result.message = "`DOWN`".to_string();
             result.status = Status::Alert;
         }
+    }
+
+    result
+}
+
+fn validate_celery_statuses(name: &str, is_online: bool) -> UnitValidationResult {
+    let mut result = UnitValidationResult {
+        name: name.to_string(),
+        status: Status::Alert,
+        message: "Celery status: `OFFLINE`".to_string(),
+        value: Value::Bool(false),
+    };
+
+    if is_online {
+        result.message = "`ONLINE`".to_string();
+        result.status = Status::Ok;
+        result.value = Value::Bool(true)
     }
 
     result
